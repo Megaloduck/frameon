@@ -338,7 +338,7 @@ class _SpotifyScreenState extends State<SpotifyScreen>
               color: const Color(0xFF1DB954),
               shape: BoxShape.circle,
               boxShadow: [BoxShadow(
-                color: const Color(0xFF1DB954).withOpacity(0.3),
+                color: const Color(0xFF1DB954).withValues(alpha: 0.3),
                 blurRadius: 16,
               )],
             ),
@@ -375,7 +375,7 @@ class _SpotifyScreenState extends State<SpotifyScreen>
             border: Border.all(color: const Color(0xFF1A2A1A)),
             borderRadius: BorderRadius.circular(4),
             boxShadow: [BoxShadow(
-              color: const Color(0xFF1DB954).withOpacity(0.04),
+              color: const Color(0xFF1DB954).withValues(alpha: 0.04),
               blurRadius: 20,
             )],
           ),
@@ -394,7 +394,7 @@ class _SpotifyScreenState extends State<SpotifyScreen>
         return Center(
           child: Container(
             width: 60, height: 60,
-            color: const Color(0xFF1DB954).withOpacity(0.3),
+            color: const Color(0xFF1DB954).withValues(alpha: 0.3),
             child: const Icon(Icons.music_note,
                 color: Color(0xFF1DB954), size: 30),
           ),
@@ -419,7 +419,7 @@ class _SpotifyScreenState extends State<SpotifyScreen>
         return Row(children: [
           Container(
             width: 72,
-            color: const Color(0xFF1DB954).withOpacity(0.15),
+            color: const Color(0xFF1DB954).withValues(alpha: 0.15),
             child: const Center(child: Icon(Icons.music_note,
                 color: Color(0xFF1DB954), size: 24)),
           ),
@@ -720,7 +720,7 @@ class _ActionButton extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         border: Border.all(color: color),
         borderRadius: BorderRadius.circular(5),
       ),

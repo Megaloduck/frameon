@@ -235,7 +235,7 @@ class _PixelCanvasEditorState extends State<PixelCanvasEditor> {
                     border: Border.all(color: const Color(0xFF1A2A1A)),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF00FF41).withOpacity(0.06),
+                        color: const Color(0xFF00FF41).withValues(alpha: 0.06),
                         blurRadius: 60, spreadRadius: 4,
                       ),
                     ],
@@ -376,7 +376,7 @@ class _PixelCanvasEditorState extends State<PixelCanvasEditor> {
               borderRadius: BorderRadius.circular(6),
               border: Border.all(color: const Color(0xFF333333)),
               boxShadow: [BoxShadow(
-                color: c.withOpacity(0.4), blurRadius: 12,
+                color: c.withValues(alpha: 0.4), blurRadius: 12,
               )],
             ),
           ),
@@ -455,7 +455,7 @@ class _PixelCanvasEditorState extends State<PixelCanvasEditor> {
                     width: 2,
                   ),
                   boxShadow: selected
-                      ? [BoxShadow(color: c.withOpacity(0.7), blurRadius: 8)]
+                      ? [BoxShadow(color: c.withValues(alpha: 0.7), blurRadius: 8)]
                       : null,
                 ),
               ),
@@ -685,9 +685,9 @@ class _ActionButton extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(
-        color: outlined ? Colors.transparent : color.withOpacity(0.1),
+        color: outlined ? Colors.transparent : color.withValues(alpha: 0.1),
         border: Border.all(
-          color: outlined ? color.withOpacity(0.3) : color,
+          color: outlined ? color.withValues(alpha: 0.3) : color,
         ),
         borderRadius: BorderRadius.circular(5),
       ),
@@ -696,7 +696,7 @@ class _ActionButton extends StatelessWidget {
         textAlign: TextAlign.center,
         style: TextStyle(
           fontSize: 11, fontWeight: FontWeight.bold,
-          color: outlined ? color.withOpacity(0.5) : color,
+          color: outlined ? color.withValues(alpha: 0.5) : color,
           letterSpacing: 1.5, fontFamily: 'monospace',
         ),
       ),

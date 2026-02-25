@@ -24,7 +24,7 @@ class PixelCanvasPreview extends StatelessWidget {
                 borderRadius: BorderRadius.circular(4),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF00FF41).withOpacity(0.05),
+                    color: const Color(0xFF00FF41).withValues(alpha: 0.05),
                     blurRadius: 20,
                     spreadRadius: 2,
                   ),

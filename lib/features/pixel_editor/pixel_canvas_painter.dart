@@ -66,7 +66,7 @@ class PixelCanvasPainter extends CustomPainter {
       // LED glow effect using MaskFilter
       if (pixelSize >= 8) {
         final glowPaint = Paint()
-          ..color = color.withOpacity(0.35)
+          ..color = color.withValues(alpha: 0.35)
           ..maskFilter = ui.MaskFilter.blur(BlurStyle.normal, pixelSize * 0.55);
         canvas.drawRect(rect.inflate(pixelSize * 0.15), glowPaint);
       }

@@ -216,11 +216,11 @@ class _MediaUploadScreenState extends State<MediaUploadScreen>
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
           border: Border.all(
-            color: const Color(0xFF00FF41).withOpacity(0.2),
+            color: const Color(0xFF00FF41).withValues(alpha: 0.2),
             width: 1,
           ),
           borderRadius: BorderRadius.circular(8),
-          color: const Color(0xFF00FF41).withOpacity(0.02),
+          color: const Color(0xFF00FF41).withValues(alpha: 0.02),
         ),
         child: Center(
           child: Column(
@@ -301,7 +301,7 @@ class _MediaUploadScreenState extends State<MediaUploadScreen>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: const Color(0xFF0D0D1A).withOpacity(0.9),
+                color: const Color(0xFF0D0D1A).withValues(alpha: 0.9),
                 border: Border.all(color: const Color(0xFF333333)),
                 borderRadius: BorderRadius.circular(4),
               ),
@@ -318,7 +318,7 @@ class _MediaUploadScreenState extends State<MediaUploadScreen>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: const Color(0xFF0D0D1A).withOpacity(0.9),
+                color: const Color(0xFF0D0D1A).withValues(alpha: 0.9),
                 border: Border.all(color: const Color(0xFF1A1A2E)),
                 borderRadius: BorderRadius.circular(4),
               ),
@@ -357,7 +357,7 @@ class _MediaUploadScreenState extends State<MediaUploadScreen>
             border: Border.all(color: const Color(0xFF1A2A1A)),
             borderRadius: BorderRadius.circular(4),
             boxShadow: [BoxShadow(
-              color: const Color(0xFF00FF41).withOpacity(0.04),
+              color: const Color(0xFF00FF41).withValues(alpha: 0.04),
               blurRadius: 20,
             )],
           ),
@@ -675,7 +675,7 @@ class _ActionButton extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
+          color: color.withValues(alpha: 0.08),
           border: Border.all(color: color),
           borderRadius: BorderRadius.circular(5),
         ),
@@ -716,8 +716,8 @@ class _HeaderBadge extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
     decoration: BoxDecoration(
-      color: color.withOpacity(0.1),
-      border: Border.all(color: color.withOpacity(0.5)),
+      color: color.withValues(alpha: 0.1),
+      border: Border.all(color: color.withValues(alpha: 0.5)),
       borderRadius: BorderRadius.circular(3),
     ),
     child: Text(label, style: TextStyle(

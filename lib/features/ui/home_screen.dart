@@ -107,8 +107,8 @@ class _MenuButton extends StatelessWidget {
         width: 300,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.05),
-          border: Border.all(color: color.withOpacity(0.25)),
+          color: color.withValues(alpha: 0.05),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(children: [
@@ -130,7 +130,7 @@ class _MenuButton extends StatelessWidget {
             )),
           ]),
           const Spacer(),
-          Text('›', style: TextStyle(fontSize: 20, color: color.withOpacity(0.4))),
+          Text('›', style: TextStyle(fontSize: 20, color: color.withValues(alpha: 0.4))),
         ]),
       ),
     );

@@ -127,10 +127,10 @@ class _ClockScreenState extends State<ClockScreen> {
           child: Container(
             decoration: BoxDecoration(
               color: Colors.black,
-              border: Border.all(color: accent.withOpacity(0.2)),
+              border: Border.all(color: accent.withValues(alpha: 0.2)),
               borderRadius: BorderRadius.circular(8),
               boxShadow: [BoxShadow(
-                color: accent.withOpacity(0.05),
+                color: accent.withValues(alpha: 0.05),
                 blurRadius: 40, spreadRadius: 4,
               )],
             ),
@@ -147,13 +147,13 @@ class _ClockScreenState extends State<ClockScreen> {
                       color: accent,
                       fontFamily: 'monospace',
                       letterSpacing: _style == ClockStyle.minimal ? 8 : 4,
-                      shadows: [Shadow(color: accent.withOpacity(0.5), blurRadius: 20)],
+                      shadows: [Shadow(color: accent.withValues(alpha: 0.5), blurRadius: 20)],
                     ),
                   ),
                   if (_format == ClockFormat.h12) ...[
                     const SizedBox(height: 4),
                     Text(_amPm, style: TextStyle(
-                      fontSize: 18, color: accent.withOpacity(0.6),
+                      fontSize: 18, color: accent.withValues(alpha: 0.6),
                       fontFamily: 'monospace', letterSpacing: 4,
                     )),
                   ],
@@ -161,11 +161,11 @@ class _ClockScreenState extends State<ClockScreen> {
                     const SizedBox(height: 12),
                     Container(
                       width: 200, height: 1,
-                      color: accent.withOpacity(0.1),
+                      color: accent.withValues(alpha: 0.1),
                     ),
                     const SizedBox(height: 12),
                     Text(_dateString, style: TextStyle(
-                      fontSize: 16, color: accent.withOpacity(0.5),
+                      fontSize: 16, color: accent.withValues(alpha: 0.5),
                       fontFamily: 'monospace', letterSpacing: 3,
                     )),
                   ],
@@ -191,7 +191,7 @@ class _ClockScreenState extends State<ClockScreen> {
           const _SectionLabel('MATRIX PREVIEW'),
           const Spacer(),
           Text('64 × 32 LED', style: TextStyle(
-            fontSize: 9, color: accent.withOpacity(0.3), fontFamily: 'monospace',
+            fontSize: 9, color: accent.withValues(alpha: 0.3), fontFamily: 'monospace',
           )),
         ]),
         const SizedBox(height: 8),
@@ -199,7 +199,7 @@ class _ClockScreenState extends State<ClockScreen> {
           height: 80,
           decoration: BoxDecoration(
             color: Colors.black,
-            border: Border.all(color: accent.withOpacity(0.15)),
+            border: Border.all(color: accent.withValues(alpha: 0.15)),
             borderRadius: BorderRadius.circular(4),
           ),
           child: Center(
@@ -213,12 +213,12 @@ class _ClockScreenState extends State<ClockScreen> {
                     fontWeight: FontWeight.bold,
                     color: accent,
                     fontFamily: 'monospace',
-                    shadows: [Shadow(color: accent.withOpacity(0.6), blurRadius: 8)],
+                    shadows: [Shadow(color: accent.withValues(alpha: 0.6), blurRadius: 8)],
                   ),
                 ),
                 if (_showDate)
                   Text(_dateString, style: TextStyle(
-                    fontSize: 7, color: accent.withOpacity(0.5),
+                    fontSize: 7, color: accent.withValues(alpha: 0.5),
                     fontFamily: 'monospace',
                   )),
               ],
@@ -303,13 +303,13 @@ class _ClockScreenState extends State<ClockScreen> {
             duration: const Duration(milliseconds: 120),
             width: 30, height: 30,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
+              color: color.withValues(alpha: 0.15),
               border: Border.all(
                 color: selected ? color : const Color(0xFF222222),
                 width: selected ? 2 : 1,
               ),
               borderRadius: BorderRadius.circular(6),
-              boxShadow: selected ? [BoxShadow(color: color.withOpacity(0.4), blurRadius: 8)] : null,
+              boxShadow: selected ? [BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 8)] : null,
             ),
             child: Center(
               child: Container(
@@ -353,7 +353,7 @@ class _ClockScreenState extends State<ClockScreen> {
             margin: const EdgeInsets.only(bottom: 6),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: active ? accent.withOpacity(0.08) : Colors.transparent,
+              color: active ? accent.withValues(alpha: 0.08) : Colors.transparent,
               border: Border.all(
                 color: active ? accent : const Color(0xFF222222),
               ),
@@ -392,7 +392,7 @@ class _ClockScreenState extends State<ClockScreen> {
         Container(
           width: 32, height: 18,
           decoration: BoxDecoration(
-            color: value ? accent.withOpacity(0.15) : const Color(0xFF1A1A2E),
+            color: value ? accent.withValues(alpha: 0.15) : const Color(0xFF1A1A2E),
             border: Border.all(color: value ? accent : const Color(0xFF333333)),
             borderRadius: BorderRadius.circular(9),
           ),
@@ -467,8 +467,8 @@ class _LiveBadgeState extends State<_LiveBadge>
     builder: (_, __) => Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: widget.color.withOpacity(0.05 + _ctrl.value * 0.1),
-        border: Border.all(color: widget.color.withOpacity(0.4 + _ctrl.value * 0.4)),
+        color: widget.color.withValues(alpha: 0.05 + _ctrl.value * 0.1),
+        border: Border.all(color: widget.color.withValues(alpha: 0.4 + _ctrl.value * 0.4)),
         borderRadius: BorderRadius.circular(3),
       ),
       child: Row(children: [
@@ -497,7 +497,7 @@ class _FormatTab extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: active ? accent.withOpacity(0.12) : Colors.transparent,
+          color: active ? accent.withValues(alpha: 0.12) : Colors.transparent,
           borderRadius: BorderRadius.circular(4),
         ),
         child: Text(label, textAlign: TextAlign.center, style: TextStyle(
@@ -532,7 +532,7 @@ class _ActionButton extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         border: Border.all(color: color),
         borderRadius: BorderRadius.circular(5),
       ),
