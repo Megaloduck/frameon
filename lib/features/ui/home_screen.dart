@@ -5,7 +5,9 @@ import '../spotify/spotify_screen.dart';
 import '../media/media_upload_screen.dart';
 import '../clock/clock_screen.dart';
 import '../../core/ble/ble_providers.dart';
+import '../../core/app_theme.dart';
 import 'connection_status.dart';
+import 'theme_switcher.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -13,81 +15,148 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final bleManager = ref.watch(bleManagerProvider);
+    final colors = AppColors.of(context);
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0F),
       body: Column(
         children: [
+          // ── Top bar with theme switcher ──────────────────────────
+          SafeArea(
+            bottom: false,
+            child: Container(
+              height: 48,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              decoration: BoxDecoration(
+                color: colors.headerBg,
+                border: Border(bottom: BorderSide(color: colors.border)),
+              ),
+              child: Row(children: [
+                // Logo mark
+                Container(
+                  width: 26, height: 26,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF00FF41), Color(0xFF00B4FF)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Center(
+                    child: Text('F', style: TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    )),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text('FRAMEON', style: TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.bold,
+                  letterSpacing: 2, color: colors.textPrimary,
+                  fontFamily: 'monospace',
+                )),
+                const Spacer(),
+                const ThemeToggleButton(),
+              ]),
+            ),
+          ),
+
+          // ── Main content ─────────────────────────────────────────
           Expanded(
             child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 64, height: 64,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF00FF41), Color(0xFF00B4FF)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(vertical: 32),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Hero logo
+                    Container(
+                      width: 72, height: 72,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF00FF41), Color(0xFF00B4FF)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF00FF41).withValues(alpha: 0.25),
+                            blurRadius: 24, offset: const Offset(0, 8),
+                          ),
+                        ],
                       ),
-                      borderRadius: BorderRadius.circular(12),
+                      child: const Center(
+                        child: Text('F', style: TextStyle(
+                          fontSize: 36, fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        )),
+                      ),
                     ),
-                    child: const Center(
-                      child: Text('F', style: TextStyle(
-                        fontSize: 32, fontWeight: FontWeight.bold, color: Colors.black,
-                      )),
+                    const SizedBox(height: 20),
+                    Text('FRAMEON', style: TextStyle(
+                      fontSize: 26, fontWeight: FontWeight.bold,
+                      letterSpacing: 6, color: colors.textPrimary,
+                      fontFamily: 'monospace',
+                    )),
+                    const SizedBox(height: 6),
+                    Text('32 × 64 LED MATRIX CONTROLLER', style: TextStyle(
+                      fontSize: 10, color: colors.textMuted,
+                      letterSpacing: 2, fontFamily: 'monospace',
+                    )),
+
+                    // ── Theme switcher pill ──────────────────────
+                    const SizedBox(height: 28),
+                    const ThemeSwitcherPill(),
+
+                    // ── Menu buttons ─────────────────────────────
+                    const SizedBox(height: 36),
+                    _MenuButton(
+                      label: 'PIXEL EDITOR',
+                      subtitle: 'Draw and upload pixel art',
+                      color: colors.accent,
+                      colors: colors,
+                      onTap: () => _push(context, const PixelCanvasEditor()),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  const Text('FRAMEON', style: TextStyle(
-                    fontSize: 28, fontWeight: FontWeight.bold,
-                    letterSpacing: 6, color: Colors.white, fontFamily: 'monospace',
-                  )),
-                  const SizedBox(height: 8),
-                  const Text('32 × 64 LED MATRIX CONTROLLER', style: TextStyle(
-                    fontSize: 11, color: Color(0xFF444444),
-                    letterSpacing: 2, fontFamily: 'monospace',
-                  )),
-                  const SizedBox(height: 48),
-                  _MenuButton(
-                    label: 'PIXEL EDITOR',
-                    subtitle: 'Draw and upload pixel art',
-                    color: const Color(0xFF00FF41),
-                    onTap: () => _push(context, const PixelCanvasEditor()),
-                  ),
-                  const SizedBox(height: 12),
-                  _MenuButton(
-                    label: 'MEDIA UPLOAD',
-                    subtitle: 'Send images and GIFs',
-                    color: const Color(0xFFFFE600),
-                    onTap: () => _push(context, const MediaUploadScreen()),
-                  ),
-                  const SizedBox(height: 12),
-                  _MenuButton(
-                    label: 'CLOCK',
-                    subtitle: 'Configure clock display',
-                    color: const Color(0xFF00B4FF),
-                    onTap: () => _push(context, const ClockScreen()),
-                  ),
-                  const SizedBox(height: 12),
-                  _MenuButton(
-                    label: 'SPOTIFY',
-                    subtitle: 'Now playing & controls',
-                    color: const Color(0xFF1DB954),
-                    onTap: () => _push(context, const SpotifyScreen()),
-                  ),
-                  const SizedBox(height: 12),
-                  _MenuButton(
-                    label: 'DEVICE SETTINGS',
-                    subtitle: 'Brightness, WiFi, firmware',
-                    color: const Color(0xFF888888),
-                    onTap: () {}, // TODO: SettingsScreen
-                  ),
-                ],
+                    const SizedBox(height: 10),
+                    _MenuButton(
+                      label: 'MEDIA UPLOAD',
+                      subtitle: 'Send images and GIFs',
+                      color: colors.accentYellow,
+                      colors: colors,
+                      onTap: () => _push(context, const MediaUploadScreen()),
+                    ),
+                    const SizedBox(height: 10),
+                    _MenuButton(
+                      label: 'CLOCK',
+                      subtitle: 'Configure clock display',
+                      color: colors.accentBlue,
+                      colors: colors,
+                      onTap: () => _push(context, const ClockScreen()),
+                    ),
+                    const SizedBox(height: 10),
+                    _MenuButton(
+                      label: 'SPOTIFY',
+                      subtitle: 'Now playing & controls',
+                      color: colors.accentSpotify,
+                      colors: colors,
+                      onTap: () => _push(context, const SpotifyScreen()),
+                    ),
+                    const SizedBox(height: 10),
+                    _MenuButton(
+                      label: 'DEVICE SETTINGS',
+                      subtitle: 'Brightness, WiFi, firmware',
+                      color: colors.textSecondary,
+                      colors: colors,
+                      onTap: () {},
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-          // BLE status pinned at bottom of home screen
+
+          // ── BLE status pinned at bottom ──────────────────────────
           ConnectionStatusBar(
             manager: bleManager,
             onTap: () => DeviceScannerSheet.show(context, bleManager),
@@ -101,16 +170,20 @@ class HomeScreen extends ConsumerWidget {
       Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
 }
 
+// ── Menu button ───────────────────────────────────────────────────────────────
+
 class _MenuButton extends StatelessWidget {
   final String label;
   final String subtitle;
   final Color color;
+  final AppColors colors;
   final VoidCallback onTap;
 
   const _MenuButton({
     required this.label,
     required this.subtitle,
     required this.color,
+    required this.colors,
     required this.onTap,
   });
 
@@ -122,9 +195,15 @@ class _MenuButton extends StatelessWidget {
         width: 300,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.05),
-          border: Border.all(color: color.withValues(alpha: 0.25)),
-          borderRadius: BorderRadius.circular(8),
+          color: colors.surface,
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: colors.isDark ? 0.04 : 0.06),
+              blurRadius: 12, offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Row(children: [
           Container(
@@ -136,16 +215,17 @@ class _MenuButton extends StatelessWidget {
           const SizedBox(width: 16),
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(label, style: TextStyle(
-              fontSize: 13, fontWeight: FontWeight.bold, color: color,
+              fontSize: 12, fontWeight: FontWeight.bold, color: color,
               letterSpacing: 1.5, fontFamily: 'monospace',
             )),
-            const SizedBox(height: 2),
-            Text(subtitle, style: const TextStyle(
-              fontSize: 10, color: Color(0xFF555555), fontFamily: 'monospace',
+            const SizedBox(height: 3),
+            Text(subtitle, style: TextStyle(
+              fontSize: 10, color: colors.textSecondary,
+              fontFamily: 'monospace',
             )),
           ]),
           const Spacer(),
-          Text('›', style: TextStyle(fontSize: 20, color: color.withValues(alpha: 0.4))),
+          Icon(Icons.chevron_right, color: color.withValues(alpha: 0.4), size: 18),
         ]),
       ),
     );

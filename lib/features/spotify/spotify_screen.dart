@@ -5,6 +5,7 @@ import '../../core/ble/ble_providers.dart';
 import '../../core/ble/ble_manager.dart';
 import '../../core/ble/ble_uuids.dart';
 import '../ui/connection_status.dart';
+import '../ui/theme_switcher.dart';
 
 // ── Mock data (replace with real Spotify API responses) ───────────────────────
 
@@ -205,6 +206,8 @@ class _SpotifyScreenState extends ConsumerState<SpotifyScreen>
         )),
         const Spacer(),
         _buildConnectButton(),
+        const SizedBox(width: 8),
+        const ThemeToggleButton(),
       ]),
     );
   }

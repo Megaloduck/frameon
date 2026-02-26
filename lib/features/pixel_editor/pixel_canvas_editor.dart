@@ -7,8 +7,10 @@ import 'pixel_canvas_preview.dart';
 import '../../core/ble/ble_providers.dart';
 import '../../core/ble/ble_manager.dart';
 import '../../core/ble/ble_uuids.dart';
+import '../../core/app_theme.dart';
 import '../frame_encoder/frame_model.dart';
 import '../ui/connection_status.dart';
+import '../ui/theme_switcher.dart';
 
 // ── Palettes ──────────────────────────────────────────────────────────────────
 
@@ -173,6 +175,8 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
             active: _previewOn,
             onTap: () => setState(() => _previewOn = !_previewOn),
           ),
+          const SizedBox(width: 8),
+          const ThemeToggleButton(),
         ],
       ),
     );

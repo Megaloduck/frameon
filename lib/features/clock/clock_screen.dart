@@ -5,6 +5,7 @@ import 'package:frameon/core/ble/ble_uuids.dart';
 import '../../core/ble/ble_providers.dart';
 import '../../core/ble/ble_manager.dart';
 import '../ui/connection_status.dart';
+import '../ui/theme_switcher.dart';
 
 enum ClockFormat { h24, h12 }
 enum ClockStyle { digital, minimal, blocky }
@@ -190,6 +191,8 @@ class _ClockScreenState extends ConsumerState<ClockScreen> {
         const Spacer(),
         if (_isLive)
           _LiveBadge(color: accent),
+        const SizedBox(width: 8),
+        const ThemeToggleButton(),
       ]),
     );
   }

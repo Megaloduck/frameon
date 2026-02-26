@@ -10,6 +10,7 @@ import '../../core/ble/ble_providers.dart';
 import '../../core/ble/ble_manager.dart';
 import '../../core/ble/ble_uuids.dart';
 import '../ui/connection_status.dart';
+import '../ui/theme_switcher.dart';
 
 enum ResizeMode { stretch, letterbox, crop }
 
@@ -255,6 +256,8 @@ class _MediaUploadScreenState extends ConsumerState<MediaUploadScreen>
                   ? const Color(0xFFFFE600)
                   : const Color(0xFF00FF41),
             ),
+          const SizedBox(width: 8),
+          const ThemeToggleButton(),
         ],
       ),
     );

@@ -1,28 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'core/app_theme.dart';
+import 'core/theme_provider.dart';
 import 'features/ui/home_screen.dart';
 
 void main() {
   runApp(const ProviderScope(child: FrameonApp()));
 }
 
-class FrameonApp extends StatelessWidget {
+class FrameonApp extends ConsumerWidget {
   const FrameonApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(themeProvider);
     return MaterialApp(
       title: 'Frameon',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF00FF41),
-          brightness: Brightness.dark,
-        ),
-        scaffoldBackgroundColor: const Color(0xFF0A0A0F),
-        fontFamily: 'monospace',
-      ),
+      themeMode: themeMode,
+      theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
       home: const HomeScreen(),
     );
   }
-}
+} 
