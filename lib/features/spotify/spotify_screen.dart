@@ -1,5 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/ble/ble_providers.dart';
+import '../../core/ble/ble_manager.dart';
+import '../../core/ble/ble_uuids.dart';
+import '../ui/connection_status.dart';
 
 // ── Mock data (replace with real Spotify API responses) ───────────────────────
 
@@ -49,14 +54,14 @@ enum ScrollSpeed { slow, medium, fast }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
-class SpotifyScreen extends StatefulWidget {
+class SpotifyScreen extends ConsumerStatefulWidget {
   const SpotifyScreen({super.key});
 
   @override
-  State<SpotifyScreen> createState() => _SpotifyScreenState();
+  ConsumerState<SpotifyScreen> createState() => _SpotifyScreenState();
 }
 
-class _SpotifyScreenState extends State<SpotifyScreen>
+class _SpotifyScreenState extends ConsumerState<SpotifyScreen>
     with SingleTickerProviderStateMixin {
   SpotifyTrack _track = _kMockTrack;
   bool _connected = false;
@@ -99,14 +104,71 @@ class _SpotifyScreenState extends State<SpotifyScreen>
     super.dispose();
   }
 
+  // Playback commands go to Spotify Web API (not BLE).
+  // The ESP32 polls Spotify autonomously; these mirror state in the app UI.
+  void _togglePlayPause() {
+    setState(() => _track = SpotifyTrack(
+      title: _track.title,
+      artist: _track.artist,
+      album: _track.album,
+      durationMs: _track.durationMs,
+      progressMs: _simulatedProgress,
+      isPlaying: !_track.isPlaying,
+    ));
+    // Spotify API call wired in next sprint
+  }
+
+  void _skipNext() {
+    // Spotify API call wired in next sprint
+    setState(() => _simulatedProgress = 0);
+  }
+
+  void _skipPrevious() {
+    // Spotify API call wired in next sprint
+    setState(() => _simulatedProgress = 0);
+  }
+
+  Future<void> _toggleSpotifyMode() async {
+    final bleManager = ref.read(bleManagerProvider);
+    final bleService = ref.read(bleServiceProvider);
+
+    if (!_sendingToDevice) {
+      if (bleManager.state != FrameonConnectionState.connected) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No device connected.',
+              style: TextStyle(fontFamily: 'monospace')),
+          backgroundColor: Color(0xFF1A0A0A),
+        ));
+        return;
+      }
+      try {
+        await bleService.setMode(kModeSpotify);
+        setState(() => _sendingToDevice = true);
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: $e',
+              style: const TextStyle(fontFamily: 'monospace')),
+          backgroundColor: const Color(0xFF1A0A0A),
+        ));
+      }
+    } else {
+      setState(() => _sendingToDevice = false);
+    }
+  }
+
   // ── Build ─────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
+    final bleManager = ref.watch(bleManagerProvider);
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0F),
       body: Column(children: [
         _buildHeader(),
+        ConnectionStatusBar(
+          manager: bleManager,
+          onTap: () => DeviceScannerSheet.show(context, bleManager),
+        ),
         Expanded(
           child: Row(children: [
             Expanded(child: _buildMainPanel()),
@@ -316,22 +378,10 @@ class _SpotifyScreenState extends State<SpotifyScreen>
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _ControlButton(icon: Icons.skip_previous, onTap: () {
-          // TODO: BLE skip previous
-        }),
+        _ControlButton(icon: Icons.skip_previous, onTap: _skipPrevious),
         const SizedBox(width: 20),
         GestureDetector(
-          onTap: () {
-            setState(() => _track = SpotifyTrack(
-              title: _track.title,
-              artist: _track.artist,
-              album: _track.album,
-              durationMs: _track.durationMs,
-              progressMs: _simulatedProgress,
-              isPlaying: !_track.isPlaying,
-            ));
-            // TODO: BLE play/pause
-          },
+          onTap: _togglePlayPause,
           child: Container(
             width: 52, height: 52,
             decoration: BoxDecoration(
@@ -349,9 +399,7 @@ class _SpotifyScreenState extends State<SpotifyScreen>
           ),
         ),
         const SizedBox(width: 20),
-        _ControlButton(icon: Icons.skip_next, onTap: () {
-          // TODO: BLE skip next
-        }),
+        _ControlButton(icon: Icons.skip_next, onTap: _skipNext),
       ],
     );
   }
@@ -470,17 +518,14 @@ class _SpotifyScreenState extends State<SpotifyScreen>
             _ActionButton(
               label: _sendingToDevice ? 'LIVE ●' : 'SEND TO DEVICE',
               color: _sendingToDevice ? const Color(0xFF1DB954) : const Color(0xFF00B4FF),
-              onTap: () {
-                setState(() => _sendingToDevice = !_sendingToDevice);
-                // TODO: pass layout config + live track to BLE manager
-              },
+              onTap: _toggleSpotifyMode,
             ),
             const SizedBox(height: 8),
             _ActionButton(
               label: 'REFRESH TRACK',
               color: const Color(0xFF1DB954),
               onTap: () {
-                // TODO: poll Spotify API
+                // Spotify API polling wired up in next sprint
                 setState(() => _simulatedProgress = 0);
               },
             ),

@@ -1,5 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:frameon/core/ble/ble_uuids.dart';
+import '../../core/ble/ble_providers.dart';
+import '../../core/ble/ble_manager.dart';
+import '../ui/connection_status.dart';
 
 enum ClockFormat { h24, h12 }
 enum ClockStyle { digital, minimal, blocky }
@@ -13,14 +18,14 @@ const Map<ClockColor, Color> kClockColors = {
   ClockColor.red:    Color(0xFFFF2D2D),
 };
 
-class ClockScreen extends StatefulWidget {
+class ClockScreen extends ConsumerStatefulWidget {
   const ClockScreen({super.key});
 
   @override
-  State<ClockScreen> createState() => _ClockScreenState();
+  ConsumerState<ClockScreen> createState() => _ClockScreenState();
 }
 
-class _ClockScreenState extends State<ClockScreen> {
+class _ClockScreenState extends ConsumerState<ClockScreen> {
   ClockFormat _format = ClockFormat.h24;
   ClockStyle _style = ClockStyle.digital;
   ClockColor _color = ClockColor.green;
@@ -68,15 +73,86 @@ class _ClockScreenState extends State<ClockScreen> {
 
   String get _amPm => _now.hour < 12 ? 'AM' : 'PM';
 
+  Future<void> _toggleClockMode() async {
+    final bleManager = ref.read(bleManagerProvider);
+    final bleService = ref.read(bleServiceProvider);
+
+    if (!_isLive) {
+      if (bleManager.state != FrameonConnectionState.connected) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No device connected.',
+              style: TextStyle(fontFamily: 'monospace')),
+          backgroundColor: Color(0xFF1A0A0A),
+        ));
+        return;
+      }
+      try {
+        await bleService.setMode(kModeClock);
+        await bleService.syncClock(
+          is24h: _format == ClockFormat.h24,
+          showSeconds: _showSeconds,
+          showDate: _showDate,
+        );
+        setState(() => _isLive = true);
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: $e',
+              style: const TextStyle(fontFamily: 'monospace')),
+          backgroundColor: const Color(0xFF1A0A0A),
+        ));
+      }
+    } else {
+      setState(() => _isLive = false);
+    }
+  }
+
+  Future<void> _syncTime() async {
+    final bleManager = ref.read(bleManagerProvider);
+    final bleService = ref.read(bleServiceProvider);
+
+    if (bleManager.state != FrameonConnectionState.connected) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No device connected.',
+            style: TextStyle(fontFamily: 'monospace')),
+        backgroundColor: Color(0xFF1A0A0A),
+      ));
+      return;
+    }
+    try {
+      await bleService.syncClock(
+        is24h: _format == ClockFormat.h24,
+        showSeconds: _showSeconds,
+        showDate: _showDate,
+      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('✓ Time synced: ${_now.toIso8601String()}',
+            style: const TextStyle(fontFamily: 'monospace')),
+        backgroundColor: const Color(0xFF0A1A0A),
+        duration: const Duration(seconds: 2),
+      ));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Sync error: $e',
+            style: const TextStyle(fontFamily: 'monospace')),
+        backgroundColor: const Color(0xFF1A0A0A),
+      ));
+    }
+  }
+
   // ── Build ─────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final accent = kClockColors[_color]!;
+    final bleManager = ref.watch(bleManagerProvider);
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0F),
       body: Column(children: [
         _buildHeader(accent),
+        ConnectionStatusBar(
+          manager: bleManager,
+          onTap: () => DeviceScannerSheet.show(context, bleManager),
+        ),
         Expanded(
           child: Row(children: [
             Expanded(child: _buildPreviewPanel(accent)),
@@ -267,23 +343,13 @@ class _ClockScreenState extends State<ClockScreen> {
             _ActionButton(
               label: _isLive ? 'STOP CLOCK' : 'SEND TO DEVICE',
               color: _isLive ? const Color(0xFFFF2D2D) : const Color(0xFF00B4FF),
-              onTap: () {
-                setState(() => _isLive = !_isLive);
-                // TODO: send clock config to BLE manager
-              },
+              onTap: _toggleClockMode,
             ),
             const SizedBox(height: 8),
             _ActionButton(
               label: 'SYNC TIME',
               color: accent,
-              onTap: () {
-                // TODO: send current epoch to ESP32
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text('Syncing ${_now.toIso8601String()}',
-                    style: const TextStyle(fontFamily: 'monospace')),
-                  backgroundColor: const Color(0xFF0D0D1A),
-                ));
-              },
+              onTap: _syncTime,
             ),
           ],
         ),

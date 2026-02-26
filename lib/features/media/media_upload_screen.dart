@@ -2,26 +2,33 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image/image.dart' as img;
 import '../frame_encoder/frame_model.dart';
 import '../frame_encoder/image_processor.dart';
+import '../../core/ble/ble_providers.dart';
+import '../../core/ble/ble_manager.dart';
+import '../../core/ble/ble_uuids.dart';
+import '../ui/connection_status.dart';
 
 enum ResizeMode { stretch, letterbox, crop }
 
-class MediaUploadScreen extends StatefulWidget {
+class MediaUploadScreen extends ConsumerStatefulWidget {
   const MediaUploadScreen({super.key});
 
   @override
-  State<MediaUploadScreen> createState() => _MediaUploadScreenState();
+  ConsumerState<MediaUploadScreen> createState() => _MediaUploadScreenState();
 }
 
-class _MediaUploadScreenState extends State<MediaUploadScreen>
+class _MediaUploadScreenState extends ConsumerState<MediaUploadScreen>
     with SingleTickerProviderStateMixin {
   Uint8List? _rawBytes;
   String? _fileName;
   bool _isGif = false;
   FrameSequence? _sequence;
   bool _processing = false;
+  bool _isSending = false;
+  double _transferProgress = 0.0;
   String? _error;
 
   ResizeMode _resizeMode = ResizeMode.letterbox;
@@ -129,15 +136,76 @@ class _MediaUploadScreenState extends State<MediaUploadScreen>
     }
   }
 
+  Future<void> _sendToDevice() async {
+    if (_sequence == null) return;
+    final bleService = ref.read(bleServiceProvider);
+    final bleManager = ref.read(bleManagerProvider);
+
+    if (bleManager.state != FrameonConnectionState.connected) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No device connected. Tap the status bar to connect.',
+            style: TextStyle(fontFamily: 'monospace')),
+        backgroundColor: Color(0xFF1A0A0A),
+      ));
+      return;
+    }
+
+    setState(() { _isSending = true; _transferProgress = 0; });
+
+    final sub = bleService.progressStream.listen((p) {
+      if (mounted) setState(() => _transferProgress = p.progress);
+    });
+
+    try {
+      await bleService.setMode(
+          _sequence!.isAnimated ? kModeGif : kModePixelArt);
+      await bleService.sendSequence(_sequence!);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('✓ Sent to device',
+              style: TextStyle(fontFamily: 'monospace')),
+          backgroundColor: Color(0xFF0A1A0A),
+          duration: Duration(seconds: 2),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: $e',
+              style: const TextStyle(fontFamily: 'monospace')),
+          backgroundColor: const Color(0xFF1A0A0A),
+        ));
+      }
+    } finally {
+      await sub.cancel();
+      if (mounted) setState(() { _isSending = false; _transferProgress = 0; });
+    }
+  }
+
   // ── Build ─────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
+    final bleManager = ref.watch(bleManagerProvider);
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0F),
       body: Column(
         children: [
           _buildHeader(),
+          ConnectionStatusBar(
+            manager: bleManager,
+            onTap: () => DeviceScannerSheet.show(context, bleManager),
+          ),
+          if (_isSending)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+              child: TransferProgressBar(
+                progress: _transferProgress,
+                label: 'TRANSMITTING FRAME DATA',
+                color: const Color(0xFF00B4FF),
+              ),
+            ),
           Expanded(
             child: Row(
               children: [
@@ -415,21 +483,10 @@ class _MediaUploadScreenState extends State<MediaUploadScreen>
               const SizedBox(height: 20),
             ],
             _ActionButton(
-              label: 'SEND TO DEVICE',
+              label: _isSending ? 'SENDING...' : 'SEND TO DEVICE',
               color: const Color(0xFF00B4FF),
-              enabled: _sequence != null,
-              onTap: () {
-                // TODO: pass _sequence to BLE manager
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Ready: ${_sequence!.frameCount} frame(s) · ${_sequence!.frames.first.byteCount} bytes each',
-                      style: const TextStyle(fontFamily: 'monospace'),
-                    ),
-                    backgroundColor: const Color(0xFF0D0D1A),
-                  ),
-                );
-              },
+              enabled: _sequence != null && !_isSending,
+              onTap: _sendToDevice,
             ),
             const SizedBox(height: 8),
             _ActionButton(

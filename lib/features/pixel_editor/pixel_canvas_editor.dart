@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'pixel_canvas_controller.dart';
 import 'pixel_canvas_painter.dart';
 import 'pixel_canvas_preview.dart';
+import '../../core/ble/ble_providers.dart';
+import '../../core/ble/ble_manager.dart';
+import '../../core/ble/ble_uuids.dart';
+import '../frame_encoder/frame_model.dart';
+import '../ui/connection_status.dart';
 
 // ── Palettes ──────────────────────────────────────────────────────────────────
 
@@ -29,14 +35,14 @@ const List<double> kZoomLevels = [6, 8, 10, 12, 14, 16];
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
-class PixelCanvasEditor extends StatefulWidget {
+class PixelCanvasEditor extends ConsumerStatefulWidget {
   const PixelCanvasEditor({super.key});
 
   @override
-  State<PixelCanvasEditor> createState() => _PixelCanvasEditorState();
+  ConsumerState<PixelCanvasEditor> createState() => _PixelCanvasEditorState();
 }
 
-class _PixelCanvasEditorState extends State<PixelCanvasEditor> {
+class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
   final _controller = PixelCanvasController();
   double _zoom = 12;
   String _palette = 'NEON';
@@ -89,6 +95,7 @@ class _PixelCanvasEditorState extends State<PixelCanvasEditor> {
 
   @override
   Widget build(BuildContext context) {
+    final bleManager = ref.watch(bleManagerProvider);
     return KeyboardListener(
       focusNode: FocusNode()..requestFocus(),
       onKeyEvent: _handleKey,
@@ -97,6 +104,10 @@ class _PixelCanvasEditorState extends State<PixelCanvasEditor> {
         body: Column(
           children: [
             _buildHeader(),
+            ConnectionStatusBar(
+              manager: bleManager,
+              onTap: () => DeviceScannerSheet.show(context, bleManager),
+            ),
             Expanded(
               child: Row(
                 children: [
@@ -493,24 +504,13 @@ class _PixelCanvasEditorState extends State<PixelCanvasEditor> {
               backgroundColor: const Color(0xFF0D0D1A),
             ),
           );
-          // TODO: pass to BLE sync engine
         },
       ),
       const SizedBox(height: 8),
       _ActionButton(
         label: 'SEND TO DEVICE',
         color: const Color(0xFF00B4FF),
-        onTap: () {
-          final bytes = _controller.exportRgb565();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Ready: ${bytes.length} bytes RGB565',
-                style: const TextStyle(fontFamily: 'monospace')),
-              backgroundColor: const Color(0xFF0D0D1A),
-            ),
-          );
-          // TODO: pass bytes to BLE manager
-        },
+        onTap: _sendToDevice,
       ),
       const SizedBox(height: 8),
       _ActionButton(
@@ -520,6 +520,45 @@ class _PixelCanvasEditorState extends State<PixelCanvasEditor> {
         onTap: _controller.clear,
       ),
     ]);
+  }
+
+  Future<void> _sendToDevice() async {
+    final bleManager = ref.read(bleManagerProvider);
+    final bleService = ref.read(bleServiceProvider);
+
+    if (bleManager.state != FrameonConnectionState.connected) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No device connected. Tap the status bar to connect.',
+            style: TextStyle(fontFamily: 'monospace')),
+        backgroundColor: Color(0xFF1A0A0A),
+      ));
+      return;
+    }
+
+    final bytes = _controller.exportRgb565();
+    final frame = FrameData(bytes: bytes, durationMs: 0);
+    final sequence = FrameSequence.still(frame);
+
+    try {
+      await bleService.setMode(kModePixelArt);
+      await bleService.sendSequence(sequence);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('✓ Sent to device',
+              style: TextStyle(fontFamily: 'monospace')),
+          backgroundColor: Color(0xFF0A1A0A),
+          duration: Duration(seconds: 2),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: $e',
+              style: const TextStyle(fontFamily: 'monospace')),
+          backgroundColor: const Color(0xFF1A0A0A),
+        ));
+      }
+    }
   }
 
   // ── Status bar ────────────────────────────────────────────────

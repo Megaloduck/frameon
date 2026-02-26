@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'features/pixel_editor/pixel_canvas_editor.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'features/ui/home_screen.dart';
 
 void main() {
-  runApp(const FrameonApp());
+  runApp(const ProviderScope(child: FrameonApp()));
 }
 
 class FrameonApp extends StatelessWidget {
@@ -21,7 +22,7 @@ class FrameonApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF0A0A0F),
         fontFamily: 'monospace',
       ),
-      home: const PixelCanvasEditor(),
+      home: const HomeScreen(),
     );
   }
 }

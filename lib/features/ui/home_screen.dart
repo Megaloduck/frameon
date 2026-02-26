@@ -1,83 +1,98 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../pixel_editor/pixel_canvas_editor.dart';
 import '../spotify/spotify_screen.dart';
 import '../media/media_upload_screen.dart';
 import '../clock/clock_screen.dart';
+import '../../core/ble/ble_providers.dart';
+import 'connection_status.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bleManager = ref.watch(bleManagerProvider);
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0F),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 64, height: 64,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF00FF41), Color(0xFF00B4FF)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(12),
+      body: Column(
+        children: [
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 64, height: 64,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF00FF41), Color(0xFF00B4FF)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Center(
+                      child: Text('F', style: TextStyle(
+                        fontSize: 32, fontWeight: FontWeight.bold, color: Colors.black,
+                      )),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text('FRAMEON', style: TextStyle(
+                    fontSize: 28, fontWeight: FontWeight.bold,
+                    letterSpacing: 6, color: Colors.white, fontFamily: 'monospace',
+                  )),
+                  const SizedBox(height: 8),
+                  const Text('32 × 64 LED MATRIX CONTROLLER', style: TextStyle(
+                    fontSize: 11, color: Color(0xFF444444),
+                    letterSpacing: 2, fontFamily: 'monospace',
+                  )),
+                  const SizedBox(height: 48),
+                  _MenuButton(
+                    label: 'PIXEL EDITOR',
+                    subtitle: 'Draw and upload pixel art',
+                    color: const Color(0xFF00FF41),
+                    onTap: () => _push(context, const PixelCanvasEditor()),
+                  ),
+                  const SizedBox(height: 12),
+                  _MenuButton(
+                    label: 'MEDIA UPLOAD',
+                    subtitle: 'Send images and GIFs',
+                    color: const Color(0xFFFFE600),
+                    onTap: () => _push(context, const MediaUploadScreen()),
+                  ),
+                  const SizedBox(height: 12),
+                  _MenuButton(
+                    label: 'CLOCK',
+                    subtitle: 'Configure clock display',
+                    color: const Color(0xFF00B4FF),
+                    onTap: () => _push(context, const ClockScreen()),
+                  ),
+                  const SizedBox(height: 12),
+                  _MenuButton(
+                    label: 'SPOTIFY',
+                    subtitle: 'Now playing & controls',
+                    color: const Color(0xFF1DB954),
+                    onTap: () => _push(context, const SpotifyScreen()),
+                  ),
+                  const SizedBox(height: 12),
+                  _MenuButton(
+                    label: 'DEVICE SETTINGS',
+                    subtitle: 'Brightness, WiFi, firmware',
+                    color: const Color(0xFF888888),
+                    onTap: () {}, // TODO: SettingsScreen
+                  ),
+                ],
               ),
-              child: const Center(
-                child: Text('F', style: TextStyle(
-                  fontSize: 32, fontWeight: FontWeight.bold, color: Colors.black,
-                )),
-              ),
             ),
-            const SizedBox(height: 24),
-            const Text('FRAMEON', style: TextStyle(
-              fontSize: 28, fontWeight: FontWeight.bold,
-              letterSpacing: 6, color: Colors.white, fontFamily: 'monospace',
-            )),
-            const SizedBox(height: 8),
-            const Text('32 × 64 LED MATRIX CONTROLLER', style: TextStyle(
-              fontSize: 11, color: Color(0xFF444444),
-              letterSpacing: 2, fontFamily: 'monospace',
-            )),
-            const SizedBox(height: 48),
-            _MenuButton(
-              label: 'PIXEL EDITOR',
-              subtitle: 'Draw and upload pixel art',
-              color: const Color(0xFF00FF41),
-              onTap: () => _push(context, const PixelCanvasEditor()),
-            ),
-            const SizedBox(height: 12),
-            _MenuButton(
-              label: 'MEDIA UPLOAD',
-              subtitle: 'Send images and GIFs',
-              color: const Color(0xFFFFE600),
-              onTap: () => _push(context, const MediaUploadScreen()),
-            ),
-            const SizedBox(height: 12),
-            _MenuButton(
-              label: 'CLOCK',
-              subtitle: 'Configure clock display',
-              color: const Color(0xFF00B4FF),
-              onTap: () => _push(context, const ClockScreen()),
-            ),
-            const SizedBox(height: 12),
-            _MenuButton(
-              label: 'SPOTIFY',
-              subtitle: 'Now playing & controls',
-              color: const Color(0xFF1DB954),
-              onTap: () => _push(context, const SpotifyScreen()),
-            ),
-            const SizedBox(height: 12),
-            _MenuButton(
-              label: 'DEVICE SETTINGS',
-              subtitle: 'Brightness, WiFi, firmware',
-              color: const Color(0xFF888888),
-              onTap: () {}, // TODO: SettingsScreen
-            ),
-          ],
-        ),
+          ),
+          // BLE status pinned at bottom of home screen
+          ConnectionStatusBar(
+            manager: bleManager,
+            onTap: () => DeviceScannerSheet.show(context, bleManager),
+          ),
+        ],
       ),
     );
   }
