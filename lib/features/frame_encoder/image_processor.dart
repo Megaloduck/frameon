@@ -1,126 +1,146 @@
-import 'dart:io';
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:image/image.dart' as img;
-import 'rgb565_encoder.dart';
 import 'frame_model.dart';
+import 'rgb565_encoder.dart';
 
-/// Supported source types for the image processor.
-enum ImageSourceType { still, gif, albumArt }
-
-/// High-level pipeline: load → decode → resize → encode → [FrameSequence].
+/// High-level image pipeline: decode → transform → encode → [FrameSequence].
 ///
-/// Usage:
-/// ```dart
-/// final processor = ImageProcessor();
-/// final sequence = await processor.processFile(File('art.gif'));
-/// bleManager.sendSequence(sequence);
-/// ```
+/// Construct once per user action with the desired settings, then call one
+/// of the `process*` methods.  Every method is async so heavy work can be
+/// offloaded to an isolate later without changing callers.
 class ImageProcessor {
-  final Rgb565Encoder _encoder;
+  final bool dithering;
+  final double brightness; // 0.0 – 1.0
+  final bool grayscale;    // ITU-R BT.709 luma conversion
 
-  ImageProcessor({
-    bool dithering = true,
-    double brightness = 1.0,
-  }) : _encoder = Rgb565Encoder(
-          useDithering: dithering,
-          brightness: brightness,
-        );
+  const ImageProcessor({
+    this.dithering  = true,
+    this.brightness = 1.0,
+    this.grayscale  = false,
+  });
 
-  // ── File pipeline ─────────────────────────────────────────────
+  // ── Encoder factory ───────────────────────────────────────────────────────
 
-  /// Load and process any supported image file (PNG, JPG, GIF, BMP, WebP).
-  Future<FrameSequence> processFile(File file) async {
-    final bytes = await file.readAsBytes();
-    return processBytes(bytes);
-  }
+  Rgb565Encoder _makeEncoder() => Rgb565Encoder(
+    useDithering: dithering,
+    brightness:   brightness,
+    grayscale:    grayscale,
+  );
 
-  /// Process raw image bytes (e.g. from file_picker or network).
+  // ── Public API ────────────────────────────────────────────────────────────
+
+  /// Stretch the image to fill the full 64 × 32 matrix (may distort).
   Future<FrameSequence> processBytes(Uint8List bytes) async {
     final image = img.decodeImage(bytes);
-    if (image == null) throw Exception('Failed to decode image');
-    return _encoder.encodeSequence(image);
+    if (image == null) throw Exception('Could not decode image');
+    return _makeEncoder().encodeSequence(image);
   }
 
-  /// Process a GIF specifically, extracting all frames with timing.
-  Future<FrameSequence> processGif(Uint8List bytes) async {
-    final gif = img.decodeGif(bytes);
-    if (gif == null) throw Exception('Failed to decode GIF');
-    return _encoder.encodeSequence(gif);
+  /// Scale the image to fit within 64 × 32, padding with black bars.
+  Future<FrameSequence> processLetterboxed(Uint8List bytes) async {
+    final image = img.decodeImage(bytes);
+    if (image == null) throw Exception('Could not decode image');
+    final processed = _letterbox(image);
+    return _makeEncoder().encodeSequence(processed);
   }
 
-  // ── Album art pipeline ────────────────────────────────────────
+  /// Scale the image so its shorter side fills the matrix, then centre-crop.
+  Future<FrameSequence> processCropped(Uint8List bytes) async {
+    final image = img.decodeImage(bytes);
+    if (image == null) throw Exception('Could not decode image');
+    final processed = _cropToMatrix(image);
+    return _makeEncoder().encodeSequence(processed);
+  }
 
-  /// Process album art from a URL response body.
-  /// Applies a slight contrast boost to look good on LED matrix.
-  Future<FrameSequence> processAlbumArt(Uint8List bytes) async {
-    var image = img.decodeImage(bytes);
-    if (image == null) throw Exception('Failed to decode album art');
-
-    // Resize to matrix dimensions first
-    image = img.copyResize(
+  /// Decode an animated GIF and encode every frame, preserving per-frame
+  /// timing from the GIF unless overridden by the caller.
+  ///
+  /// [frameDurationOverride] — when non-null every frame gets this fixed
+  /// duration in milliseconds, ignoring whatever the GIF specifies.
+  ///
+  /// [frameDurationMultiplier] — scales each frame's original GIF duration.
+  /// 1.0 = unchanged, 0.5 = 2× faster, 2.0 = 2× slower.
+  /// Ignored when [frameDurationOverride] is set.
+  Future<FrameSequence> processGif(
+    Uint8List bytes, {
+    int?   frameDurationOverride,
+    double frameDurationMultiplier = 1.0,
+  }) async {
+    // decodeGif preserves per-frame timing; decodeImage is the fallback for
+    // single-frame or malformed GIFs.
+    final image = img.decodeGif(bytes) ?? img.decodeImage(bytes);
+    if (image == null) throw Exception('Could not decode GIF');
+    return _makeEncoder().encodeSequence(
       image,
-      width: kMatrixCols,
-      height: kMatrixRows,
+      frameDurationOverride:   frameDurationOverride,
+      frameDurationMultiplier: frameDurationMultiplier,
+    );
+  }
+
+  // ── Geometry helpers ──────────────────────────────────────────────────────
+
+  /// Letterbox: fit the whole image inside 64 × 32 with black padding.
+  img.Image _letterbox(img.Image src) {
+    const targetW = 64;
+    const targetH = 32;
+
+    // Scale so the image fits entirely within the target rectangle.
+    final scaleX = targetW / src.width;
+    final scaleY = targetH / src.height;
+    final scale  = scaleX < scaleY ? scaleX : scaleY;
+
+    final scaledW = (src.width  * scale).round();
+    final scaledH = (src.height * scale).round();
+
+    final scaled = img.copyResize(
+      src,
+      width:  scaledW,
+      height: scaledH,
       interpolation: img.Interpolation.average,
     );
 
-    // Boost saturation slightly so it pops on the LED matrix
-    image = img.adjustColor(image, saturation: 1.2, contrast: 1.1);
-
-    final frame = _encoder.encodeFrame(image);
-    return FrameSequence.still(frame);
-  }
-
-  // ── Cropping helpers ──────────────────────────────────────────
-
-  /// Crop to centre square before resizing (good for portrait album art).
-  img.Image _cropToSquare(img.Image image) {
-    final size = image.width < image.height ? image.width : image.height;
-    final x = (image.width - size) ~/ 2;
-    final y = (image.height - size) ~/ 2;
-    return img.copyCrop(image, x: x, y: y, width: size, height: size);
-  }
-
-  /// Letterbox: fit image into 64×32 preserving aspect ratio, black bars.
-  img.Image _letterbox(img.Image image) {
-    final srcRatio = image.width / image.height;
-    const dstRatio = kMatrixCols / kMatrixRows;
-
-    int targetW, targetH;
-    if (srcRatio > dstRatio) {
-      targetW = kMatrixCols;
-      targetH = (kMatrixCols / srcRatio).round();
-    } else {
-      targetH = kMatrixRows;
-      targetW = (kMatrixRows * srcRatio).round();
-    }
-
-    final resized = img.copyResize(image, width: targetW, height: targetH);
-    final canvas = img.Image(width: kMatrixCols, height: kMatrixRows);
+    // Composite onto a black canvas.
+    final canvas = img.Image(width: targetW, height: targetH);
     img.fill(canvas, color: img.ColorRgb8(0, 0, 0));
 
-    final offsetX = (kMatrixCols - targetW) ~/ 2;
-    final offsetY = (kMatrixRows - targetH) ~/ 2;
-    img.compositeImage(canvas, resized, dstX: offsetX, dstY: offsetY);
+    final offsetX = (targetW - scaledW) ~/ 2;
+    final offsetY = (targetH - scaledH) ~/ 2;
+
+    img.compositeImage(canvas, scaled, dstX: offsetX, dstY: offsetY);
     return canvas;
   }
 
-  /// Process with letterboxing (preserves aspect ratio).
-  Future<FrameSequence> processLetterboxed(Uint8List bytes) async {
-    var image = img.decodeImage(bytes);
-    if (image == null) throw Exception('Failed to decode image');
-    image = _letterbox(image);
-    final frame = _encoder.encodeFrame(image);
-    return FrameSequence.still(frame);
-  }
+  /// Centre-crop: scale so the shorter side fills 64 × 32, then crop.
+  img.Image _cropToMatrix(img.Image src) {
+    const targetW = 64;
+    const targetH = 32;
 
-  /// Process with centre-crop (fills full matrix, may clip edges).
-  Future<FrameSequence> processCropped(Uint8List bytes) async {
-    var image = img.decodeImage(bytes);
-    if (image == null) throw Exception('Failed to decode image');
-    image = _cropToSquare(image);
-    image = img.copyResize(image, width: kMatrixCols, height: kMatrixRows);
-    final frame = _encoder.encodeFrame(image);
-    return FrameSequence.still(frame);
+    // Scale so the image covers the full target (both dimensions >= target).
+    final scaleX = targetW / src.width;
+    final scaleY = targetH / src.height;
+    final scale  = scaleX > scaleY ? scaleX : scaleY;
+
+    final scaledW = (src.width  * scale).ceil();
+    final scaledH = (src.height * scale).ceil();
+
+    final scaled = img.copyResize(
+      src,
+      width:  scaledW,
+      height: scaledH,
+      interpolation: img.Interpolation.average,
+    );
+
+    // Crop to exact target size from the centre.
+    final cropX = (scaledW - targetW) ~/ 2;
+    final cropY = (scaledH - targetH) ~/ 2;
+
+    return img.copyCrop(
+      scaled,
+      x: cropX,
+      y: cropY,
+      width:  targetW,
+      height: targetH,
+    );
   }
 }

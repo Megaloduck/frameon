@@ -13,12 +13,18 @@ class Rgb565Encoder {
   final bool useDithering;
   final double brightness; // 0.0 – 1.0
 
+  /// When true, convert to grayscale before encoding.
+  /// Uses ITU-R BT.709 luma: Y = 0.2126R + 0.7152G + 0.0722B
+  /// so green-heavy images don't over-brighten.
+  final bool grayscale;
+
   const Rgb565Encoder({
     this.useDithering = true,
     this.brightness = 1.0,
+    this.grayscale = false,
   });
 
-  // ── Public API ────────────────────────────────────────────────
+  // ── Public API ────────────────────────────────────────────────────────────
 
   /// Encode a single [img.Image] frame into a [FrameData].
   FrameData encodeFrame(img.Image frame, {int durationMs = 0}) {
@@ -30,7 +36,18 @@ class Rgb565Encoder {
   }
 
   /// Encode all frames of an [img.Image] (handles GIF animations).
-  FrameSequence encodeSequence(img.Image image) {
+  ///
+  /// [frameDurationOverride] — when non-null every frame uses this fixed
+  /// duration (ms) regardless of what's baked into the GIF.
+  ///
+  /// [frameDurationMultiplier] — scales each frame's original duration.
+  /// 1.0 = unchanged, 0.5 = 2× faster, 2.0 = 2× slower.
+  /// Ignored when [frameDurationOverride] is set.
+  FrameSequence encodeSequence(
+    img.Image image, {
+    int? frameDurationOverride,
+    double frameDurationMultiplier = 1.0,
+  }) {
     if (image.numFrames <= 1) {
       return FrameSequence.still(encodeFrame(image));
     }
@@ -38,25 +55,24 @@ class Rgb565Encoder {
     final frames = <FrameData>[];
     for (int i = 0; i < image.numFrames; i++) {
       final frame = image.frames[i];
-      // GIF frame duration is stored in frameDuration (centiseconds → ms)
-      final durationMs = (frame.frameDuration * 10).round().clamp(16, 5000);
+      // GIF frameDuration is in centiseconds → convert to ms
+      final originalMs = (frame.frameDuration * 10).round().clamp(16, 5000);
+      final int durationMs;
+      if (frameDurationOverride != null) {
+        durationMs = frameDurationOverride.clamp(16, 5000);
+      } else {
+        durationMs =
+            (originalMs * frameDurationMultiplier).round().clamp(16, 5000);
+      }
       frames.add(encodeFrame(frame, durationMs: durationMs));
     }
     return FrameSequence.animated(frames);
   }
 
   /// Encode raw RGBA bytes (e.g. from Flutter's toByteData) into a [FrameData].
-  ///
-  /// [rgba] must be a flat list of bytes in RGBA order (4 bytes per pixel).
-  /// [width] and [height] must match the actual pixel dimensions.
   FrameData encodeRgba(List<int> rgba, int width, int height) {
-    // Convert to a proper Uint8List so img.Image.fromBytes receives a
-    // ByteBuffer — previously this returned a plain List<int>, which caused
-    // a runtime type error inside the image library.
-    final Uint8List bytes = rgba is Uint8List
-        ? rgba
-        : Uint8List.fromList(rgba);
-
+    final Uint8List bytes =
+        rgba is Uint8List ? rgba : Uint8List.fromList(rgba);
     final image = img.Image.fromBytes(
       width: width,
       height: height,
@@ -67,7 +83,7 @@ class Rgb565Encoder {
     return encodeFrame(image);
   }
 
-  // ── Resize ────────────────────────────────────────────────────
+  // ── Resize ────────────────────────────────────────────────────────────────
 
   img.Image _ensureSize(img.Image src) {
     if (src.width == kMatrixCols && src.height == kMatrixRows) return src;
@@ -79,18 +95,26 @@ class Rgb565Encoder {
     );
   }
 
-  // ── Encoding: raw ─────────────────────────────────────────────
+  // ── Grayscale ─────────────────────────────────────────────────────────────
+
+  /// ITU-R BT.709 luma.  Returns (y, y, y).
+  (int, int, int) _toGray(int r, int g, int b) {
+    final y = (0.2126 * r + 0.7152 * g + 0.0722 * b).round().clamp(0, 255);
+    return (y, y, y);
+  }
+
+  // ── Encoding: raw ─────────────────────────────────────────────────────────
 
   List<int> _encodeRaw(img.Image image) {
     final bytes = <int>[];
     for (int y = 0; y < kMatrixRows; y++) {
       for (int x = 0; x < kMatrixCols; x++) {
         final pixel = image.getPixel(x, y);
-        final word = _toRgb565(
-          _applyBrightness(pixel.r.toInt()),
-          _applyBrightness(pixel.g.toInt()),
-          _applyBrightness(pixel.b.toInt()),
-        );
+        var r = _applyBrightness(pixel.r.toInt());
+        var g = _applyBrightness(pixel.g.toInt());
+        var b = _applyBrightness(pixel.b.toInt());
+        if (grayscale) (r, g, b) = _toGray(r, g, b);
+        final word = _toRgb565(r, g, b);
         bytes.add((word >> 8) & 0xFF);
         bytes.add(word & 0xFF);
       }
@@ -98,22 +122,29 @@ class Rgb565Encoder {
     return bytes;
   }
 
-  // ── Encoding: Floyd-Steinberg dithering ───────────────────────
+  // ── Encoding: Floyd-Steinberg dithering ───────────────────────────────────
 
   List<int> _encodeWithDithering(img.Image image) {
-    // Work in floating-point RGB to accumulate error.
-    final r = List<double>.generate(kMatrixPixels,
-        (i) => _applyBrightness(
-            image.getPixel(i % kMatrixCols, i ~/ kMatrixCols).r.toInt())
-            .toDouble());
-    final g = List<double>.generate(kMatrixPixels,
-        (i) => _applyBrightness(
-            image.getPixel(i % kMatrixCols, i ~/ kMatrixCols).g.toInt())
-            .toDouble());
-    final b = List<double>.generate(kMatrixPixels,
-        (i) => _applyBrightness(
-            image.getPixel(i % kMatrixCols, i ~/ kMatrixCols).b.toInt())
-            .toDouble());
+    // Pre-compute brightness + grayscale for all three channels up front.
+    double _ch(img.Pixel p, int ch) {
+      final rv = _applyBrightness(p.r.toInt()).toDouble();
+      final gv = _applyBrightness(p.g.toInt()).toDouble();
+      final bv = _applyBrightness(p.b.toInt()).toDouble();
+      if (grayscale) {
+        return 0.2126 * rv + 0.7152 * gv + 0.0722 * bv;
+      }
+      return ch == 0 ? rv : ch == 1 ? gv : bv;
+    }
+
+    final r = List<double>.generate(
+        kMatrixPixels,
+        (i) => _ch(image.getPixel(i % kMatrixCols, i ~/ kMatrixCols), 0));
+    final g = List<double>.generate(
+        kMatrixPixels,
+        (i) => _ch(image.getPixel(i % kMatrixCols, i ~/ kMatrixCols), 1));
+    final b = List<double>.generate(
+        kMatrixPixels,
+        (i) => _ch(image.getPixel(i % kMatrixCols, i ~/ kMatrixCols), 2));
 
     final bytes = <int>[];
 
@@ -121,7 +152,6 @@ class Rgb565Encoder {
       for (int x = 0; x < kMatrixCols; x++) {
         final idx = y * kMatrixCols + x;
 
-        // Quantise to RGB565
         final qr = _quantise8to5(r[idx].round().clamp(0, 255));
         final qg = _quantise8to6(g[idx].round().clamp(0, 255));
         final qb = _quantise8to5(b[idx].round().clamp(0, 255));
@@ -134,7 +164,6 @@ class Rgb565Encoder {
         bytes.add((word >> 8) & 0xFF);
         bytes.add(word & 0xFF);
 
-        // Distribute error to neighbours
         final er = r[idx] - out8r;
         final eg = g[idx] - out8g;
         final eb = b[idx] - out8b;
@@ -163,24 +192,19 @@ class Rgb565Encoder {
     channel[y * kMatrixCols + x] += error;
   }
 
-  // ── Conversion helpers ────────────────────────────────────────
+  // ── Conversion helpers ────────────────────────────────────────────────────
 
   int _applyBrightness(int value) =>
       (value * brightness).round().clamp(0, 255);
 
-  /// Pack r8, g8, b8 → RGB565 word (with internal quantisation).
   int _toRgb565(int r, int g, int b) {
-    final r5 = _quantise8to5(r);
-    final g6 = _quantise8to6(g);
-    final b5 = _quantise8to5(b);
-    return _toRgb565Raw(r5, g6, b5);
+    return _toRgb565Raw(_quantise8to5(r), _quantise8to6(g), _quantise8to5(b));
   }
 
-  /// Pack already-quantised r5, g6, b5 → RGB565 word.
   int _toRgb565Raw(int r5, int g6, int b5) => (r5 << 11) | (g6 << 5) | b5;
 
   int _quantise8to5(int v) => (v >> 3) & 0x1F;
   int _quantise8to6(int v) => (v >> 2) & 0x3F;
-  int _expand5to8(int v) => (v << 3) | (v >> 2);
-  int _expand6to8(int v) => (v << 2) | (v >> 4);
+  int _expand5to8(int v)   => (v << 3) | (v >> 2);
+  int _expand6to8(int v)   => (v << 2) | (v >> 4);
 }
