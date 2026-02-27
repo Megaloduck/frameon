@@ -97,15 +97,16 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
     final bleManager = ref.watch(bleManagerProvider);
     return KeyboardListener(
       focusNode: FocusNode()..requestFocus(),
       onKeyEvent: _handleKey,
       child: Scaffold(
-        backgroundColor: const Color(0xFF0A0A0F),
+        backgroundColor: colors.background,
         body: Column(
           children: [
-            _buildHeader(),
+            _buildHeader(colors),
             ConnectionStatusBar(
               manager: bleManager,
               onTap: () => DeviceScannerSheet.show(context, bleManager),
@@ -113,13 +114,13 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
             Expanded(
               child: Row(
                 children: [
-                  _buildLeftToolbar(),
-                  Expanded(child: _buildCanvas()),
-                  _buildRightPanel(),
+                  _buildLeftToolbar(colors),
+                  Expanded(child: _buildCanvas(colors)),
+                  _buildRightPanel(colors),
                 ],
               ),
             ),
-            _buildStatusBar(),
+            _buildStatusBar(colors),
           ],
         ),
       ),
@@ -128,16 +129,21 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
 
   // ── Header ────────────────────────────────────────────────────
 
-  Widget _buildHeader() {
+  Widget _buildHeader(AppColors colors) {
     return Container(
       height: 48,
-      decoration: const BoxDecoration(
-        color: Color(0xFF0D0D1A),
-        border: Border(bottom: BorderSide(color: Color(0xFF1A1A2E))),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(bottom: BorderSide(color: colors.border)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
         children: [
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Icon(Icons.arrow_back_ios, color: colors.textMuted, size: 16),
+          ),
+          const SizedBox(width: 12),
           Container(
             width: 28, height: 28,
             decoration: BoxDecoration(
@@ -155,24 +161,27 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
             ),
           ),
           const SizedBox(width: 10),
-          const Text('FRAMEON', style: TextStyle(
+          Text('FRAMEON', style: TextStyle(
             fontSize: 14, fontWeight: FontWeight.bold,
-            letterSpacing: 2, color: Colors.white, fontFamily: 'monospace',
+            letterSpacing: 2, color: colors.textPrimary, fontFamily: 'monospace',
           )),
           const SizedBox(width: 10),
-          const Text('PIXEL EDITOR', style: TextStyle(
-            fontSize: 11, color: Color(0xFF444444),
+          Text('PIXEL EDITOR', style: TextStyle(
+            fontSize: 11, color: colors.textMuted,
             letterSpacing: 1.5, fontFamily: 'monospace',
           )),
           const Spacer(),
-          const Text('32 × 64 LED MATRIX', style: TextStyle(
-            fontSize: 11, color: Color(0xFF444444),
+          Text('32 × 64 LED MATRIX', style: TextStyle(
+            fontSize: 11, color: colors.textMuted,
             letterSpacing: 1, fontFamily: 'monospace',
           )),
           const SizedBox(width: 16),
           _HeaderButton(
             label: _previewOn ? 'PREVIEW ON' : 'PREVIEW OFF',
             active: _previewOn,
+            activeColor: colors.accent,
+            borderColor: colors.border,
+            inactiveTextColor: colors.textSecondary,
             onTap: () => setState(() => _previewOn = !_previewOn),
           ),
           const SizedBox(width: 8),
@@ -184,43 +193,66 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
 
   // ── Left toolbar ──────────────────────────────────────────────
 
-  Widget _buildLeftToolbar() {
+  Widget _buildLeftToolbar(AppColors colors) {
     return ListenableBuilder(
       listenable: _controller,
       builder: (context, _) => Container(
         width: 68,
-        decoration: const BoxDecoration(
-          color: Color(0xFF0D0D1A),
-          border: Border(right: BorderSide(color: Color(0xFF1A1A2E))),
+        decoration: BoxDecoration(
+          color: colors.surface,
+          border: Border(right: BorderSide(color: colors.border)),
         ),
         padding: const EdgeInsets.symmetric(vertical: 16),
         child: Column(
           children: [
-            _ToolButton(icon: '✏️', label: 'Draw [D]',
+            _ToolButton(
+              icon: '✏️', label: 'Draw [D]',
               active: _controller.tool == PixelTool.draw,
-              onTap: () => _controller.setTool(PixelTool.draw)),
+              activeColor: colors.accent,
+              borderColor: colors.border,
+              onTap: () => _controller.setTool(PixelTool.draw),
+            ),
             const SizedBox(height: 6),
-            _ToolButton(icon: '⬜', label: 'Erase [E]',
+            _ToolButton(
+              icon: '⬜', label: 'Erase [E]',
               active: _controller.tool == PixelTool.erase,
-              onTap: () => _controller.setTool(PixelTool.erase)),
+              activeColor: colors.accent,
+              borderColor: colors.border,
+              onTap: () => _controller.setTool(PixelTool.erase),
+            ),
             const SizedBox(height: 6),
-            _ToolButton(icon: '🪣', label: 'Fill [F]',
+            _ToolButton(
+              icon: '🪣', label: 'Fill [F]',
               active: _controller.tool == PixelTool.fill,
-              onTap: () => _controller.setTool(PixelTool.fill)),
+              activeColor: colors.accent,
+              borderColor: colors.border,
+              onTap: () => _controller.setTool(PixelTool.fill),
+            ),
             const SizedBox(height: 6),
-            _ToolButton(icon: '💉', label: 'Pick [I]',
+            _ToolButton(
+              icon: '💉', label: 'Pick [I]',
               active: _controller.tool == PixelTool.eyedrop,
-              onTap: () => _controller.setTool(PixelTool.eyedrop)),
-            const _Divider(),
-            _IconButton(icon: '↩', tooltip: 'Undo',
-              onTap: _controller.canUndo ? _controller.undo : null),
+              activeColor: colors.accent,
+              borderColor: colors.border,
+              onTap: () => _controller.setTool(PixelTool.eyedrop),
+            ),
+            _Divider(color: colors.border),
+            _IconButton(
+              icon: '↩', tooltip: 'Undo',
+              borderColor: colors.border,
+              onTap: _controller.canUndo ? _controller.undo : null,
+            ),
             const SizedBox(height: 6),
-            _IconButton(icon: '↪', tooltip: 'Redo',
-              onTap: _controller.canRedo ? _controller.redo : null),
-            const _Divider(),
+            _IconButton(
+              icon: '↪', tooltip: 'Redo',
+              borderColor: colors.border,
+              onTap: _controller.canRedo ? _controller.redo : null,
+            ),
+            _Divider(color: colors.border),
             _IconButton(
               icon: '✕', tooltip: 'Clear',
-              color: const Color(0xFFFF2D2D),
+              color: colors.accentRed,
+              borderColor: colors.border,
               onTap: _controller.clear,
             ),
           ],
@@ -231,13 +263,12 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
 
   // ── Canvas ────────────────────────────────────────────────────
 
-  Widget _buildCanvas() {
+  Widget _buildCanvas(AppColors colors) {
     final canvasW = kCols * _zoom;
     final canvasH = kRows * _zoom;
 
     return Stack(
       children: [
-        // Scrollable canvas
         Center(
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -247,10 +278,10 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: const Color(0xFF1A2A1A)),
+                    border: Border.all(color: colors.accent.withValues(alpha: 0.15)),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF00FF41).withValues(alpha: 0.06),
+                        color: colors.accent.withValues(alpha: 0.06),
                         blurRadius: 60, spreadRadius: 4,
                       ),
                     ],
@@ -269,6 +300,7 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
                           painter: PixelCanvasPainter(
                             pixels: _controller.pixels,
                             pixelSize: _zoom,
+                            isDark: colors.isDark,
                           ),
                         ),
                       ),
@@ -279,45 +311,42 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
             ),
           ),
         ),
-
-        // Zoom controls
         Positioned(
           top: 16, right: 16,
-          child: _buildZoomControls(),
+          child: _buildZoomControls(colors),
         ),
       ],
     );
   }
 
-  Widget _buildZoomControls() {
+  Widget _buildZoomControls(AppColors colors) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF0D0D1A),
-        border: Border.all(color: const Color(0xFF1A1A2E)),
+        color: colors.surface,
+        border: Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('ZOOM ', style: TextStyle(
-            fontSize: 10, color: Color(0xFF444444),
+          Text('ZOOM ', style: TextStyle(
+            fontSize: 10, color: colors.textMuted,
             letterSpacing: 1, fontFamily: 'monospace',
           )),
           ...kZoomLevels.map((z) => Padding(
             padding: const EdgeInsets.only(left: 4),
             child: GestureDetector(
               onTap: () => setState(() => _zoom = z),
-              child: Container(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 120),
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                 decoration: BoxDecoration(
                   color: _zoom == z
-                      ? const Color(0xFF00FF4122)
+                      ? colors.accent.withValues(alpha: 0.12)
                       : Colors.transparent,
                   border: Border.all(
-                    color: _zoom == z
-                        ? const Color(0xFF00FF41)
-                        : const Color(0xFF222222),
+                    color: _zoom == z ? colors.accent : colors.border,
                   ),
                   borderRadius: BorderRadius.circular(3),
                 ),
@@ -325,9 +354,7 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
                   '${z.toInt()}×',
                   style: TextStyle(
                     fontSize: 10,
-                    color: _zoom == z
-                        ? const Color(0xFF00FF41)
-                        : const Color(0xFF444444),
+                    color: _zoom == z ? colors.accent : colors.textMuted,
                     fontFamily: 'monospace',
                   ),
                 ),
@@ -341,12 +368,12 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
 
   // ── Right panel ───────────────────────────────────────────────
 
-  Widget _buildRightPanel() {
+  Widget _buildRightPanel(AppColors colors) {
     return Container(
       width: 220,
-      decoration: const BoxDecoration(
-        color: Color(0xFF0D0D1A),
-        border: Border(left: BorderSide(color: Color(0xFF1A1A2E))),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(left: BorderSide(color: colors.border)),
       ),
       child: ListenableBuilder(
         listenable: _controller,
@@ -355,17 +382,17 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildActiveColor(),
+              _buildActiveColor(colors),
               const SizedBox(height: 20),
-              _buildPaletteSection(),
+              _buildPaletteSection(colors),
               const SizedBox(height: 20),
               if (_previewOn) ...[
-                PixelCanvasPreview(controller: _controller),
+                PixelCanvasPreview(controller: _controller, colors: colors),
                 const SizedBox(height: 20),
               ],
-              _buildCanvasInfo(),
+              _buildCanvasInfo(colors),
               const SizedBox(height: 20),
-              _buildActions(),
+              _buildActions(colors),
             ],
           ),
         ),
@@ -373,7 +400,7 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
     );
   }
 
-  Widget _buildActiveColor() {
+  Widget _buildActiveColor(AppColors colors) {
     final c = _controller.activeColor;
     final hex = '#${c.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
     final rgb = 'RGB(${c.red},${c.green},${c.blue})';
@@ -381,7 +408,7 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionLabel('ACTIVE COLOR'),
+        _SectionLabel('ACTIVE COLOR', colors),
         const SizedBox(height: 8),
         Row(children: [
           Container(
@@ -389,7 +416,7 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
             decoration: BoxDecoration(
               color: c,
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: const Color(0xFF333333)),
+              border: Border.all(color: colors.border),
               boxShadow: [BoxShadow(
                 color: c.withValues(alpha: 0.4), blurRadius: 12,
               )],
@@ -397,13 +424,13 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
           ),
           const SizedBox(width: 10),
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(hex, style: const TextStyle(
+            Text(hex, style: TextStyle(
               fontSize: 13, fontWeight: FontWeight.bold,
-              color: Colors.white, letterSpacing: 1, fontFamily: 'monospace',
+              color: colors.textPrimary, letterSpacing: 1, fontFamily: 'monospace',
             )),
             const SizedBox(height: 2),
-            Text(rgb, style: const TextStyle(
-              fontSize: 10, color: Color(0xFF555555), fontFamily: 'monospace',
+            Text(rgb, style: TextStyle(
+              fontSize: 10, color: colors.textSecondary, fontFamily: 'monospace',
             )),
           ]),
         ]),
@@ -411,26 +438,28 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
     );
   }
 
-  Widget _buildPaletteSection() {
+  Widget _buildPaletteSection(AppColors colors) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionLabel('PALETTE'),
+        _SectionLabel('PALETTE', colors),
         const SizedBox(height: 8),
-        // Palette tabs
         Row(
           children: kPalettes.keys.map((name) {
             final active = _palette == name;
             return Expanded(
               child: GestureDetector(
                 onTap: () => setState(() => _palette = name),
-                child: Container(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 120),
                   margin: const EdgeInsets.only(right: 3),
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   decoration: BoxDecoration(
-                    color: active ? const Color(0xFF00FF4122) : Colors.transparent,
+                    color: active
+                        ? colors.accent.withValues(alpha: 0.12)
+                        : Colors.transparent,
                     border: Border.all(
-                      color: active ? const Color(0xFF00FF41) : const Color(0xFF222222),
+                      color: active ? colors.accent : colors.border,
                     ),
                     borderRadius: BorderRadius.circular(3),
                   ),
@@ -438,7 +467,7 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 8,
-                      color: active ? const Color(0xFF00FF41) : const Color(0xFF444444),
+                      color: active ? colors.accent : colors.textMuted,
                       letterSpacing: 0.5,
                       fontFamily: 'monospace',
                     ),
@@ -449,7 +478,6 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
           }).toList(),
         ),
         const SizedBox(height: 10),
-        // Color swatches
         GridView.count(
           crossAxisCount: 4,
           shrinkWrap: true,
@@ -466,7 +494,7 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
                   color: c,
                   borderRadius: BorderRadius.circular(4),
                   border: Border.all(
-                    color: selected ? Colors.white : Colors.transparent,
+                    color: selected ? colors.textPrimary : Colors.transparent,
                     width: 2,
                   ),
                   boxShadow: selected
@@ -481,31 +509,30 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
     );
   }
 
-  Widget _buildCanvasInfo() {
+  Widget _buildCanvasInfo(AppColors colors) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionLabel('CANVAS INFO'),
+        _SectionLabel('CANVAS INFO', colors),
         const SizedBox(height: 8),
-        _InfoRow('Dimensions', '$kRows × $kCols px'),
-        _InfoRow('Lit pixels', '${_controller.litPixelCount}'),
-        _InfoRow('History', '${_controller.canUndo ? "can undo" : "–"}'),
+        _InfoRow('Dimensions', '$kRows × $kCols px', colors),
+        _InfoRow('Lit pixels', '${_controller.litPixelCount}', colors),
+        _InfoRow('History', _controller.canUndo ? 'can undo' : '–', colors),
       ],
     );
   }
 
-  Widget _buildActions() {
+  Widget _buildActions(AppColors colors) {
     return Column(children: [
       _ActionButton(
         label: 'EXPORT JSON',
-        color: const Color(0xFF00FF41),
+        color: colors.accent,
         onTap: () {
           final json = _controller.exportJson();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Exported ${json.length} bytes',
                 style: const TextStyle(fontFamily: 'monospace')),
-              backgroundColor: const Color(0xFF0D0D1A),
             ),
           );
         },
@@ -513,13 +540,13 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
       const SizedBox(height: 8),
       _ActionButton(
         label: 'SEND TO DEVICE',
-        color: const Color(0xFF00B4FF),
+        color: colors.accentBlue,
         onTap: _sendToDevice,
       ),
       const SizedBox(height: 8),
       _ActionButton(
         label: 'CLEAR CANVAS',
-        color: const Color(0xFFFF2D2D),
+        color: colors.accentRed,
         outlined: true,
         onTap: _controller.clear,
       ),
@@ -534,7 +561,6 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('No device connected. Tap the status bar to connect.',
             style: TextStyle(fontFamily: 'monospace')),
-        backgroundColor: Color(0xFF1A0A0A),
       ));
       return;
     }
@@ -550,7 +576,6 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('✓ Sent to device',
               style: TextStyle(fontFamily: 'monospace')),
-          backgroundColor: Color(0xFF0A1A0A),
           duration: Duration(seconds: 2),
         ));
       }
@@ -559,7 +584,6 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Error: $e',
               style: const TextStyle(fontFamily: 'monospace')),
-          backgroundColor: const Color(0xFF1A0A0A),
         ));
       }
     }
@@ -567,30 +591,33 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
 
   // ── Status bar ────────────────────────────────────────────────
 
-  Widget _buildStatusBar() {
+  Widget _buildStatusBar(AppColors colors) {
     return ListenableBuilder(
       listenable: _controller,
       builder: (context, _) => Container(
         height: 28,
-        decoration: const BoxDecoration(
-          color: Color(0xFF0D0D1A),
-          border: Border(top: BorderSide(color: Color(0xFF1A1A2E))),
+        decoration: BoxDecoration(
+          color: colors.surface,
+          border: Border(top: BorderSide(color: colors.border)),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Row(children: [
           _StatusItem('TOOL', _controller.tool.name.toUpperCase(),
-              const Color(0xFF00FF41)),
+              colors.accent, colors),
           const SizedBox(width: 24),
-          _StatusItem('COLOR',
+          _StatusItem(
+            'COLOR',
             '#${_controller.activeColor.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
-            _controller.activeColor),
+            _controller.activeColor,
+            colors,
+          ),
           const SizedBox(width: 24),
-          _StatusItem('ZOOM', '${_zoom.toInt()}×', const Color(0xFF666666)),
+          _StatusItem('ZOOM', '${_zoom.toInt()}×', colors.textSecondary, colors),
           const Spacer(),
-          const Text(
+          Text(
             'D · E · F · I — TOOLS    CTRL+Z · CTRL+Y — UNDO/REDO',
             style: TextStyle(
-              fontSize: 9, color: Color(0xFF333333),
+              fontSize: 9, color: colors.textMuted,
               letterSpacing: 0.8, fontFamily: 'monospace',
             ),
           ),
@@ -604,11 +631,12 @@ class _PixelCanvasEditorState extends ConsumerState<PixelCanvasEditor> {
 
 class _SectionLabel extends StatelessWidget {
   final String text;
-  const _SectionLabel(this.text);
+  final AppColors colors;
+  const _SectionLabel(this.text, this.colors);
 
   @override
-  Widget build(BuildContext context) => Text(text, style: const TextStyle(
-    fontSize: 9, letterSpacing: 2.0, color: Color(0xFF333333),
+  Widget build(BuildContext context) => Text(text, style: TextStyle(
+    fontSize: 9, letterSpacing: 2.0, color: colors.textMuted,
     fontWeight: FontWeight.bold, fontFamily: 'monospace',
   ));
 }
@@ -617,11 +645,14 @@ class _ToolButton extends StatelessWidget {
   final String icon;
   final String label;
   final bool active;
+  final Color activeColor;
+  final Color borderColor;
   final VoidCallback onTap;
 
   const _ToolButton({
     required this.icon, required this.label,
-    required this.active, required this.onTap,
+    required this.active, required this.activeColor,
+    required this.borderColor, required this.onTap,
   });
 
   @override
@@ -633,9 +664,9 @@ class _ToolButton extends StatelessWidget {
         duration: const Duration(milliseconds: 120),
         width: 44, height: 44,
         decoration: BoxDecoration(
-          color: active ? const Color(0xFF00FF4122) : Colors.transparent,
+          color: active ? activeColor.withValues(alpha: 0.12) : Colors.transparent,
           border: Border.all(
-            color: active ? const Color(0xFF00FF41) : const Color(0xFF222222),
+            color: active ? activeColor : borderColor,
           ),
           borderRadius: BorderRadius.circular(6),
         ),
@@ -649,49 +680,57 @@ class _IconButton extends StatelessWidget {
   final String icon;
   final String tooltip;
   final VoidCallback? onTap;
-  final Color color;
+  final Color? color;
+  final Color borderColor;
 
   const _IconButton({
     required this.icon, required this.tooltip,
-    this.onTap, this.color = const Color(0xFF888888),
+    required this.borderColor,
+    this.onTap, this.color,
   });
 
   @override
-  Widget build(BuildContext context) => Tooltip(
-    message: tooltip,
-    child: GestureDetector(
-      onTap: onTap,
-      child: Opacity(
-        opacity: onTap == null ? 0.3 : 1.0,
-        child: Container(
-          width: 44, height: 36,
-          decoration: BoxDecoration(
-            border: Border.all(color: const Color(0xFF333333)),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Center(
-            child: Text(icon, style: TextStyle(fontSize: 15, color: color)),
+  Widget build(BuildContext context) {
+    final AppColors colors = AppColors.of(context);
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Opacity(
+          opacity: onTap == null ? 0.3 : 1.0,
+          child: Container(
+            width: 44, height: 36,
+            decoration: BoxDecoration(
+              border: Border.all(color: borderColor),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Center(
+              child: Text(icon,
+                style: TextStyle(fontSize: 15, color: color ?? colors.textSecondary)),
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _Divider extends StatelessWidget {
-  const _Divider();
+  final Color color;
+  const _Divider({required this.color});
 
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 10),
-    child: Container(height: 1, width: 40, color: const Color(0xFF1A1A2E)),
+    child: Container(height: 1, width: 40, color: color),
   );
 }
 
 class _InfoRow extends StatelessWidget {
   final String label;
   final String value;
-  const _InfoRow(this.label, this.value);
+  final AppColors colors;
+  const _InfoRow(this.label, this.value, this.colors);
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -699,11 +738,11 @@ class _InfoRow extends StatelessWidget {
     child: Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(
-          fontSize: 11, color: Color(0xFF444444), fontFamily: 'monospace',
+        Text(label, style: TextStyle(
+          fontSize: 11, color: colors.textMuted, fontFamily: 'monospace',
         )),
-        Text(value, style: const TextStyle(
-          fontSize: 11, color: Color(0xFF888888), fontFamily: 'monospace',
+        Text(value, style: TextStyle(
+          fontSize: 11, color: colors.textSecondary, fontFamily: 'monospace',
         )),
       ],
     ),
@@ -750,27 +789,33 @@ class _ActionButton extends StatelessWidget {
 class _HeaderButton extends StatelessWidget {
   final String label;
   final bool active;
+  final Color activeColor;
+  final Color borderColor;
+  final Color inactiveTextColor;
   final VoidCallback onTap;
 
   const _HeaderButton({
     required this.label, required this.active, required this.onTap,
+    required this.activeColor, required this.borderColor,
+    required this.inactiveTextColor,
   });
 
   @override
   Widget build(BuildContext context) => GestureDetector(
     onTap: onTap,
-    child: Container(
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       decoration: BoxDecoration(
-        color: active ? const Color(0xFF00FF4122) : Colors.transparent,
+        color: active ? activeColor.withValues(alpha: 0.12) : Colors.transparent,
         border: Border.all(
-          color: active ? const Color(0xFF00FF41) : const Color(0xFF333333),
+          color: active ? activeColor : borderColor,
         ),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(label, style: TextStyle(
         fontSize: 10,
-        color: active ? const Color(0xFF00FF41) : const Color(0xFF555555),
+        color: active ? activeColor : inactiveTextColor,
         letterSpacing: 1, fontFamily: 'monospace',
       )),
     ),
@@ -781,13 +826,14 @@ class _StatusItem extends StatelessWidget {
   final String label;
   final String value;
   final Color valueColor;
+  final AppColors colors;
 
-  const _StatusItem(this.label, this.value, this.valueColor);
+  const _StatusItem(this.label, this.value, this.valueColor, this.colors);
 
   @override
   Widget build(BuildContext context) => Row(children: [
-    Text('$label: ', style: const TextStyle(
-      fontSize: 10, color: Color(0xFF333333),
+    Text('$label: ', style: TextStyle(
+      fontSize: 10, color: colors.textMuted,
       letterSpacing: 0.8, fontFamily: 'monospace',
     )),
     Text(value, style: TextStyle(

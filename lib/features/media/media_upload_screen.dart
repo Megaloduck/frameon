@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image/image.dart' as img;
 import '../frame_encoder/frame_model.dart';
 import '../frame_encoder/image_processor.dart';
+import '../../core/app_theme.dart';
 import '../../core/ble/ble_providers.dart';
 import '../../core/ble/ble_manager.dart';
 import '../../core/ble/ble_uuids.dart';
@@ -36,7 +37,6 @@ class _MediaUploadScreenState extends ConsumerState<MediaUploadScreen>
   double _brightness = 1.0;
   bool _dithering = true;
 
-  // GIF preview animation
   int _previewFrame = 0;
   late final AnimationController _gifController;
 
@@ -118,7 +118,6 @@ class _MediaUploadScreenState extends ConsumerState<MediaUploadScreen>
           break;
       }
 
-      // If it's a GIF, re-run with full GIF pipeline to preserve frames
       if (_isGif) {
         sequence = await processor.processGif(_rawBytes!);
       }
@@ -146,7 +145,6 @@ class _MediaUploadScreenState extends ConsumerState<MediaUploadScreen>
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('No device connected. Tap the status bar to connect.',
             style: TextStyle(fontFamily: 'monospace')),
-        backgroundColor: Color(0xFF1A0A0A),
       ));
       return;
     }
@@ -166,7 +164,6 @@ class _MediaUploadScreenState extends ConsumerState<MediaUploadScreen>
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('✓ Sent to device',
               style: TextStyle(fontFamily: 'monospace')),
-          backgroundColor: Color(0xFF0A1A0A),
           duration: Duration(seconds: 2),
         ));
       }
@@ -175,7 +172,6 @@ class _MediaUploadScreenState extends ConsumerState<MediaUploadScreen>
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Error: $e',
               style: const TextStyle(fontFamily: 'monospace')),
-          backgroundColor: const Color(0xFF1A0A0A),
         ));
       }
     } finally {
@@ -188,12 +184,14 @@ class _MediaUploadScreenState extends ConsumerState<MediaUploadScreen>
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
     final bleManager = ref.watch(bleManagerProvider);
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0F),
+      backgroundColor: colors.background,
       body: Column(
         children: [
-          _buildHeader(),
+          _buildHeader(colors),
           ConnectionStatusBar(
             manager: bleManager,
             onTap: () => DeviceScannerSheet.show(context, bleManager),
@@ -204,46 +202,45 @@ class _MediaUploadScreenState extends ConsumerState<MediaUploadScreen>
               child: TransferProgressBar(
                 progress: _transferProgress,
                 label: 'TRANSMITTING FRAME DATA',
-                color: const Color(0xFF00B4FF),
+                color: colors.accentBlue,
               ),
             ),
           Expanded(
             child: Row(
               children: [
-                Expanded(child: _buildMainPanel()),
-                _buildRightPanel(),
+                Expanded(child: _buildMainPanel(colors)),
+                _buildRightPanel(colors),
               ],
             ),
           ),
-          _buildStatusBar(),
+          _buildStatusBar(colors),
         ],
       ),
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(AppColors colors) {
     return Container(
       height: 48,
-      decoration: const BoxDecoration(
-        color: Color(0xFF0D0D1A),
-        border: Border(bottom: BorderSide(color: Color(0xFF1A1A2E))),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(bottom: BorderSide(color: colors.border)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
         children: [
           GestureDetector(
             onTap: () => Navigator.pop(context),
-            child: const Icon(Icons.arrow_back_ios,
-                color: Color(0xFF444444), size: 16),
+            child: Icon(Icons.arrow_back_ios, color: colors.textMuted, size: 16),
           ),
           const SizedBox(width: 16),
-          const Text('MEDIA UPLOAD', style: TextStyle(
+          Text('MEDIA UPLOAD', style: TextStyle(
             fontSize: 13, fontWeight: FontWeight.bold,
-            letterSpacing: 2, color: Colors.white, fontFamily: 'monospace',
+            letterSpacing: 2, color: colors.textPrimary, fontFamily: 'monospace',
           )),
           const SizedBox(width: 10),
-          const Text('GIF · PNG · JPG', style: TextStyle(
-            fontSize: 11, color: Color(0xFF444444),
+          Text('GIF · PNG · JPG', style: TextStyle(
+            fontSize: 11, color: colors.textMuted,
             letterSpacing: 1.5, fontFamily: 'monospace',
           )),
           const Spacer(),
@@ -253,8 +250,8 @@ class _MediaUploadScreenState extends ConsumerState<MediaUploadScreen>
                   ? '${_sequence!.frameCount} FRAMES'
                   : 'STILL',
               color: _sequence!.isAnimated
-                  ? const Color(0xFFFFE600)
-                  : const Color(0xFF00FF41),
+                  ? colors.accentYellow
+                  : colors.accent,
             ),
           const SizedBox(width: 8),
           const ThemeToggleButton(),
@@ -263,22 +260,22 @@ class _MediaUploadScreenState extends ConsumerState<MediaUploadScreen>
     );
   }
 
-  Widget _buildMainPanel() {
+  Widget _buildMainPanel(AppColors colors) {
     return Padding(
       padding: const EdgeInsets.all(32),
       child: Column(
         children: [
-          Expanded(child: _buildDropZone()),
+          Expanded(child: _buildDropZone(colors)),
           const SizedBox(height: 24),
-          _buildMatrixPreview(),
+          _buildMatrixPreview(colors),
         ],
       ),
     );
   }
 
-  Widget _buildDropZone() {
+  Widget _buildDropZone(AppColors colors) {
     if (_rawBytes != null && !_processing) {
-      return _buildImagePreview();
+      return _buildImagePreview(colors);
     }
 
     return GestureDetector(
@@ -287,61 +284,60 @@ class _MediaUploadScreenState extends ConsumerState<MediaUploadScreen>
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
           border: Border.all(
-            color: const Color(0xFF00FF41).withValues(alpha: 0.2),
+            color: colors.accent.withValues(alpha: 0.2),
             width: 1,
           ),
           borderRadius: BorderRadius.circular(8),
-          color: const Color(0xFF00FF41).withValues(alpha: 0.02),
+          color: colors.accent.withValues(alpha: 0.02),
         ),
         child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (_processing) ...[
-                const SizedBox(
+                SizedBox(
                   width: 32, height: 32,
                   child: CircularProgressIndicator(
-                    color: Color(0xFF00FF41), strokeWidth: 1.5,
+                    color: colors.accent, strokeWidth: 1.5,
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text('ENCODING...', style: TextStyle(
-                  fontSize: 11, color: Color(0xFF00FF41),
+                Text('ENCODING...', style: TextStyle(
+                  fontSize: 11, color: colors.accent,
                   letterSpacing: 2, fontFamily: 'monospace',
                 )),
               ] else if (_error != null) ...[
-                const Icon(Icons.error_outline,
-                    color: Color(0xFFFF2D2D), size: 32),
+                Icon(Icons.error_outline, color: colors.accentRed, size: 32),
                 const SizedBox(height: 12),
-                Text(_error!, style: const TextStyle(
-                  fontSize: 10, color: Color(0xFFFF2D2D),
+                Text(_error!, style: TextStyle(
+                  fontSize: 10, color: colors.accentRed,
                   fontFamily: 'monospace',
                 ), textAlign: TextAlign.center),
                 const SizedBox(height: 16),
-                _SmallButton(label: 'TRY AGAIN', onTap: _pickFile),
+                _SmallButton(label: 'TRY AGAIN', onTap: _pickFile, colors: colors),
               ] else ...[
                 Container(
                   width: 64, height: 64,
                   decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFF1A2A1A)),
+                    border: Border.all(color: colors.border),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.upload_outlined,
-                      color: Color(0xFF333333), size: 28),
+                  child: Icon(Icons.upload_outlined,
+                      color: colors.textMuted, size: 28),
                 ),
                 const SizedBox(height: 20),
-                const Text('TAP TO UPLOAD', style: TextStyle(
+                Text('TAP TO UPLOAD', style: TextStyle(
                   fontSize: 13, fontWeight: FontWeight.bold,
-                  color: Color(0xFF00FF41), letterSpacing: 2,
+                  color: colors.accent, letterSpacing: 2,
                   fontFamily: 'monospace',
                 )),
                 const SizedBox(height: 8),
-                const Text('PNG · JPG · GIF · BMP · WebP',
-                  style: TextStyle(fontSize: 10, color: Color(0xFF333333),
+                Text('PNG · JPG · GIF · BMP · WebP',
+                  style: TextStyle(fontSize: 10, color: colors.textMuted,
                     letterSpacing: 1, fontFamily: 'monospace')),
                 const SizedBox(height: 4),
-                const Text('Will be encoded to 64 × 32 RGB565',
-                  style: TextStyle(fontSize: 10, color: Color(0xFF222222),
+                Text('Will be encoded to 64 × 32 RGB565',
+                  style: TextStyle(fontSize: 10, color: colors.textMuted,
                     letterSpacing: 0.5, fontFamily: 'monospace')),
               ],
             ],
@@ -351,14 +347,14 @@ class _MediaUploadScreenState extends ConsumerState<MediaUploadScreen>
     );
   }
 
-  Widget _buildImagePreview() {
+  Widget _buildImagePreview(AppColors colors) {
     return Stack(
       children: [
         Container(
           decoration: BoxDecoration(
-            border: Border.all(color: const Color(0xFF1A2A1A)),
+            border: Border.all(color: colors.border),
             borderRadius: BorderRadius.circular(8),
-            color: Colors.black,
+            color: colors.inputBg,
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(7),
@@ -372,12 +368,12 @@ class _MediaUploadScreenState extends ConsumerState<MediaUploadScreen>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: const Color(0xFF0D0D1A).withValues(alpha: 0.9),
-                border: Border.all(color: const Color(0xFF333333)),
+                color: colors.surface.withValues(alpha: 0.9),
+                border: Border.all(color: colors.border),
                 borderRadius: BorderRadius.circular(4),
               ),
-              child: const Text('CHANGE', style: TextStyle(
-                fontSize: 9, color: Color(0xFF888888),
+              child: Text('CHANGE', style: TextStyle(
+                fontSize: 9, color: colors.textSecondary,
                 letterSpacing: 1, fontFamily: 'monospace',
               )),
             ),
@@ -389,12 +385,12 @@ class _MediaUploadScreenState extends ConsumerState<MediaUploadScreen>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: const Color(0xFF0D0D1A).withValues(alpha: 0.9),
-                border: Border.all(color: const Color(0xFF1A1A2E)),
+                color: colors.surface.withValues(alpha: 0.9),
+                border: Border.all(color: colors.border),
                 borderRadius: BorderRadius.circular(4),
               ),
-              child: Text(_fileName!, style: const TextStyle(
-                fontSize: 9, color: Color(0xFF555555),
+              child: Text(_fileName!, style: TextStyle(
+                fontSize: 9, color: colors.textSecondary,
                 letterSpacing: 0.5, fontFamily: 'monospace',
               )),
             ),
@@ -403,32 +399,32 @@ class _MediaUploadScreenState extends ConsumerState<MediaUploadScreen>
     );
   }
 
-  // Matrix LED preview
-  Widget _buildMatrixPreview() {
+  Widget _buildMatrixPreview(AppColors colors) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(children: [
-          const _SectionLabel('MATRIX PREVIEW'),
+          _SectionLabel('MATRIX PREVIEW', colors),
           const SizedBox(width: 8),
-          const Text('64 × 32', style: TextStyle(
-            fontSize: 9, color: Color(0xFF333333), fontFamily: 'monospace',
+          Text('64 × 32', style: TextStyle(
+            fontSize: 9, color: colors.textMuted, fontFamily: 'monospace',
           )),
           const Spacer(),
           if (_sequence != null && _sequence!.isAnimated)
             Text('FRAME ${_previewFrame + 1}/${_sequence!.frameCount}',
-              style: const TextStyle(fontSize: 9, color: Color(0xFF444444),
+              style: TextStyle(fontSize: 9, color: colors.textMuted,
                 fontFamily: 'monospace')),
         ]),
         const SizedBox(height: 8),
         Container(
           height: 100,
           decoration: BoxDecoration(
+            // The matrix preview is always black — it simulates the LED panel
             color: Colors.black,
-            border: Border.all(color: const Color(0xFF1A2A1A)),
+            border: Border.all(color: colors.accent.withValues(alpha: 0.2)),
             borderRadius: BorderRadius.circular(4),
             boxShadow: [BoxShadow(
-              color: const Color(0xFF00FF41).withValues(alpha: 0.04),
+              color: colors.accent.withValues(alpha: 0.04),
               blurRadius: 20,
             )],
           ),
@@ -438,9 +434,9 @@ class _MediaUploadScreenState extends ConsumerState<MediaUploadScreen>
                 ? _MatrixPreviewPainter(
                     frame: _sequence!.frames[_previewFrame],
                   )
-                : const Center(
+                : Center(
                     child: Text('NO DATA', style: TextStyle(
-                      fontSize: 9, color: Color(0xFF222222),
+                      fontSize: 9, color: colors.textMuted,
                       fontFamily: 'monospace',
                     )),
                   ),
@@ -452,49 +448,51 @@ class _MediaUploadScreenState extends ConsumerState<MediaUploadScreen>
 
   // ── Right panel ───────────────────────────────────────────────
 
-  Widget _buildRightPanel() {
+  Widget _buildRightPanel(AppColors colors) {
     return Container(
       width: 220,
-      decoration: const BoxDecoration(
-        color: Color(0xFF0D0D1A),
-        border: Border(left: BorderSide(color: Color(0xFF1A1A2E))),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(left: BorderSide(color: colors.border)),
       ),
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const _SectionLabel('RESIZE MODE'),
+            _SectionLabel('RESIZE MODE', colors),
             const SizedBox(height: 10),
-            ..._buildResizeModes(),
+            ..._buildResizeModes(colors),
             const SizedBox(height: 20),
-            const _SectionLabel('BRIGHTNESS'),
+            _SectionLabel('BRIGHTNESS', colors),
             const SizedBox(height: 8),
-            _buildBrightnessSlider(),
+            _buildBrightnessSlider(colors),
             const SizedBox(height: 20),
-            const _SectionLabel('OPTIONS'),
+            _SectionLabel('OPTIONS', colors),
             const SizedBox(height: 10),
-            _buildDitheringToggle(),
+            _buildDitheringToggle(colors),
             const SizedBox(height: 24),
             if (_sequence != null) ...[
-              const _SectionLabel('OUTPUT'),
+              _SectionLabel('OUTPUT', colors),
               const SizedBox(height: 8),
-              _InfoRow('Frames', '${_sequence!.frameCount}'),
-              _InfoRow('Bytes', '${_sequence!.frames.first.byteCount * _sequence!.frameCount}'),
+              _InfoRow('Frames', '${_sequence!.frameCount}', colors),
+              _InfoRow('Bytes',
+                '${_sequence!.frames.first.byteCount * _sequence!.frameCount}',
+                colors),
               if (_sequence!.isAnimated)
-                _InfoRow('Duration', '${_sequence!.totalDurationMs}ms'),
+                _InfoRow('Duration', '${_sequence!.totalDurationMs}ms', colors),
               const SizedBox(height: 20),
             ],
             _ActionButton(
               label: _isSending ? 'SENDING...' : 'SEND TO DEVICE',
-              color: const Color(0xFF00B4FF),
+              color: colors.accentBlue,
               enabled: _sequence != null && !_isSending,
               onTap: _sendToDevice,
             ),
             const SizedBox(height: 8),
             _ActionButton(
               label: 'RE-ENCODE',
-              color: const Color(0xFF00FF41),
+              color: colors.accent,
               enabled: _rawBytes != null,
               onTap: _processImage,
             ),
@@ -504,7 +502,7 @@ class _MediaUploadScreenState extends ConsumerState<MediaUploadScreen>
     );
   }
 
-  List<Widget> _buildResizeModes() {
+  List<Widget> _buildResizeModes(AppColors colors) {
     const modes = [
       (ResizeMode.letterbox, 'LETTERBOX', 'Preserve ratio, black bars'),
       (ResizeMode.crop,      'CROP',      'Fill matrix, centre crop'),
@@ -517,13 +515,14 @@ class _MediaUploadScreenState extends ConsumerState<MediaUploadScreen>
           setState(() => _resizeMode = m.$1);
           if (_rawBytes != null) _processImage();
         },
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
           margin: const EdgeInsets.only(bottom: 6),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: active ? const Color(0xFF00FF4115) : Colors.transparent,
+            color: active ? colors.accent.withValues(alpha: 0.08) : Colors.transparent,
             border: Border.all(
-              color: active ? const Color(0xFF00FF41) : const Color(0xFF222222),
+              color: active ? colors.accent : colors.border,
             ),
             borderRadius: BorderRadius.circular(5),
           ),
@@ -532,18 +531,18 @@ class _MediaUploadScreenState extends ConsumerState<MediaUploadScreen>
               width: 6, height: 6,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: active ? const Color(0xFF00FF41) : const Color(0xFF333333),
+                color: active ? colors.accent : colors.textMuted,
               ),
             ),
             const SizedBox(width: 10),
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(m.$2, style: TextStyle(
                 fontSize: 10, fontWeight: FontWeight.bold,
-                color: active ? const Color(0xFF00FF41) : const Color(0xFF555555),
+                color: active ? colors.accent : colors.textSecondary,
                 letterSpacing: 1, fontFamily: 'monospace',
               )),
-              Text(m.$3, style: const TextStyle(
-                fontSize: 9, color: Color(0xFF333333), fontFamily: 'monospace',
+              Text(m.$3, style: TextStyle(
+                fontSize: 9, color: colors.textMuted, fontFamily: 'monospace',
               )),
             ]),
           ]),
@@ -552,14 +551,14 @@ class _MediaUploadScreenState extends ConsumerState<MediaUploadScreen>
     }).toList();
   }
 
-  Widget _buildBrightnessSlider() {
+  Widget _buildBrightnessSlider(AppColors colors) {
     return Column(children: [
       SliderTheme(
         data: SliderTheme.of(context).copyWith(
-          activeTrackColor: const Color(0xFF00FF41),
-          inactiveTrackColor: const Color(0xFF1A1A2E),
-          thumbColor: const Color(0xFF00FF41),
-          overlayColor: const Color(0xFF00FF4122),
+          activeTrackColor: colors.accent,
+          inactiveTrackColor: colors.border,
+          thumbColor: colors.accent,
+          overlayColor: colors.accent.withValues(alpha: 0.12),
           trackHeight: 2,
           thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
         ),
@@ -571,27 +570,28 @@ class _MediaUploadScreenState extends ConsumerState<MediaUploadScreen>
           onChangeEnd: (_) { if (_rawBytes != null) _processImage(); },
         ),
       ),
-      Text('${(_brightness * 100).round()}%', style: const TextStyle(
-        fontSize: 10, color: Color(0xFF444444), fontFamily: 'monospace',
+      Text('${(_brightness * 100).round()}%', style: TextStyle(
+        fontSize: 10, color: colors.textMuted, fontFamily: 'monospace',
       )),
     ]);
   }
 
-  Widget _buildDitheringToggle() {
+  Widget _buildDitheringToggle(AppColors colors) {
     return GestureDetector(
       onTap: () {
         setState(() => _dithering = !_dithering);
         if (_rawBytes != null) _processImage();
       },
       child: Row(children: [
-        Container(
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
           width: 32, height: 18,
           decoration: BoxDecoration(
             color: _dithering
-                ? const Color(0xFF00FF4122)
-                : const Color(0xFF1A1A2E),
+                ? colors.toggleActive.withValues(alpha: 0.15)
+                : colors.toggleInactive,
             border: Border.all(
-              color: _dithering ? const Color(0xFF00FF41) : const Color(0xFF333333),
+              color: _dithering ? colors.toggleActive : colors.border,
             ),
             borderRadius: BorderRadius.circular(9),
           ),
@@ -602,43 +602,44 @@ class _MediaUploadScreenState extends ConsumerState<MediaUploadScreen>
               width: 12, height: 12,
               margin: const EdgeInsets.symmetric(horizontal: 2),
               decoration: BoxDecoration(
-                color: _dithering ? const Color(0xFF00FF41) : const Color(0xFF333333),
+                color: _dithering ? colors.toggleActive : colors.textMuted,
                 shape: BoxShape.circle,
               ),
             ),
           ),
         ),
         const SizedBox(width: 10),
-        const Text('DITHERING', style: TextStyle(
-          fontSize: 10, color: Color(0xFF555555),
+        Text('DITHERING', style: TextStyle(
+          fontSize: 10, color: colors.textSecondary,
           letterSpacing: 1, fontFamily: 'monospace',
         )),
       ]),
     );
   }
 
-  Widget _buildStatusBar() {
+  Widget _buildStatusBar(AppColors colors) {
     return Container(
       height: 28,
-      decoration: const BoxDecoration(
-        color: Color(0xFF0D0D1A),
-        border: Border(top: BorderSide(color: Color(0xFF1A1A2E))),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(top: BorderSide(color: colors.border)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(children: [
-        _StatusItem('MODE', _resizeMode.name.toUpperCase(), const Color(0xFF00FF41)),
+        _StatusItem('MODE', _resizeMode.name.toUpperCase(), colors.accent, colors),
         const SizedBox(width: 24),
-        _StatusItem('BRIGHTNESS', '${(_brightness * 100).round()}%', const Color(0xFF666666)),
+        _StatusItem('BRIGHTNESS', '${(_brightness * 100).round()}%',
+            colors.textSecondary, colors),
         const SizedBox(width: 24),
         _StatusItem('DITHER', _dithering ? 'ON' : 'OFF',
-            _dithering ? const Color(0xFF00FF41) : const Color(0xFF444444)),
+            _dithering ? colors.accent : colors.textMuted, colors),
         const Spacer(),
         if (_sequence != null)
           Text(
             _sequence!.isAnimated
                 ? 'ANIMATED GIF · ${_sequence!.frameCount} frames · ${_sequence!.totalDurationMs}ms'
                 : 'STILL IMAGE · ${_sequence!.frames.first.byteCount} bytes',
-            style: const TextStyle(fontSize: 9, color: Color(0xFF333333),
+            style: TextStyle(fontSize: 9, color: colors.textMuted,
                 fontFamily: 'monospace'),
           ),
       ]),
@@ -692,29 +693,33 @@ class _FramePainter extends CustomPainter {
   bool shouldRepaint(_FramePainter old) => old.frame != frame;
 }
 
-// ── Shared sub-widgets ────────────────────────────────────────────────────────
+// ── Sub-widgets ───────────────────────────────────────────────────────────────
 
 class _SectionLabel extends StatelessWidget {
   final String text;
-  const _SectionLabel(this.text);
+  final AppColors colors;
+  const _SectionLabel(this.text, this.colors);
   @override
-  Widget build(BuildContext context) => Text(text, style: const TextStyle(
-    fontSize: 9, letterSpacing: 2, color: Color(0xFF333333),
+  Widget build(BuildContext context) => Text(text, style: TextStyle(
+    fontSize: 9, letterSpacing: 2, color: colors.textMuted,
     fontWeight: FontWeight.bold, fontFamily: 'monospace',
   ));
 }
 
 class _InfoRow extends StatelessWidget {
   final String label, value;
-  const _InfoRow(this.label, this.value);
+  final AppColors colors;
+  const _InfoRow(this.label, this.value, this.colors);
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 4),
     child: Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(fontSize: 10, color: Color(0xFF444444), fontFamily: 'monospace')),
-        Text(value, style: const TextStyle(fontSize: 10, color: Color(0xFF888888), fontFamily: 'monospace')),
+        Text(label, style: TextStyle(
+            fontSize: 10, color: colors.textMuted, fontFamily: 'monospace')),
+        Text(value, style: TextStyle(
+            fontSize: 10, color: colors.textSecondary, fontFamily: 'monospace')),
       ],
     ),
   );
@@ -725,7 +730,10 @@ class _ActionButton extends StatelessWidget {
   final Color color;
   final bool enabled;
   final VoidCallback onTap;
-  const _ActionButton({required this.label, required this.color, required this.onTap, this.enabled = true});
+  const _ActionButton({
+    required this.label, required this.color,
+    required this.onTap, this.enabled = true,
+  });
   @override
   Widget build(BuildContext context) => GestureDetector(
     onTap: enabled ? onTap : null,
@@ -751,18 +759,19 @@ class _ActionButton extends StatelessWidget {
 class _SmallButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
-  const _SmallButton({required this.label, required this.onTap});
+  final AppColors colors;
+  const _SmallButton({required this.label, required this.onTap, required this.colors});
   @override
   Widget build(BuildContext context) => GestureDetector(
     onTap: onTap,
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFF333333)),
+        border: Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Text(label, style: const TextStyle(
-        fontSize: 10, color: Color(0xFF666666), fontFamily: 'monospace',
+      child: Text(label, style: TextStyle(
+        fontSize: 10, color: colors.textSecondary, fontFamily: 'monospace',
       )),
     ),
   );
@@ -789,11 +798,12 @@ class _HeaderBadge extends StatelessWidget {
 class _StatusItem extends StatelessWidget {
   final String label, value;
   final Color valueColor;
-  const _StatusItem(this.label, this.value, this.valueColor);
+  final AppColors colors;
+  const _StatusItem(this.label, this.value, this.valueColor, this.colors);
   @override
   Widget build(BuildContext context) => Row(children: [
-    Text('$label: ', style: const TextStyle(
-      fontSize: 10, color: Color(0xFF333333), fontFamily: 'monospace',
+    Text('$label: ', style: TextStyle(
+      fontSize: 10, color: colors.textMuted, fontFamily: 'monospace',
     )),
     Text(value, style: TextStyle(
       fontSize: 10, color: valueColor, fontFamily: 'monospace',

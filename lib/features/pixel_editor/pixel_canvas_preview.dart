@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
+import '../../core/app_theme.dart';
 import 'pixel_canvas_painter.dart';
 import 'pixel_canvas_controller.dart';
 
 /// A compact widget that shows a real-time preview of the LED matrix.
 class PixelCanvasPreview extends StatelessWidget {
   final PixelCanvasController controller;
+  final AppColors colors;
 
-  const PixelCanvasPreview({super.key, required this.controller});
+  const PixelCanvasPreview({
+    super.key,
+    required this.controller,
+    required this.colors,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -16,15 +22,18 @@ class PixelCanvasPreview extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _SectionLabel('LED PREVIEW'),
+            Text('LED PREVIEW', style: TextStyle(
+              fontSize: 9, letterSpacing: 2.0, color: colors.textMuted,
+              fontWeight: FontWeight.bold, fontFamily: 'monospace',
+            )),
             const SizedBox(height: 8),
             Container(
               decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFF1A2A1A)),
+                border: Border.all(color: colors.accent.withValues(alpha: 0.2)),
                 borderRadius: BorderRadius.circular(4),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF00FF41).withValues(alpha: 0.05),
+                    color: colors.accent.withValues(alpha: 0.05),
                     blurRadius: 20,
                     spreadRadius: 2,
                   ),
@@ -43,34 +52,16 @@ class PixelCanvasPreview extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               'Actual ${kRows}×${kCols} ratio',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 9,
-                color: Color(0xFF333333),
+                color: colors.textMuted,
                 letterSpacing: 0.5,
+                fontFamily: 'monospace',
               ),
             ),
           ],
         );
       },
-    );
-  }
-}
-
-class _SectionLabel extends StatelessWidget {
-  final String text;
-  const _SectionLabel(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontSize: 9,
-        letterSpacing: 2.0,
-        color: Color(0xFF333333),
-        fontWeight: FontWeight.bold,
-        fontFamily: 'monospace',
-      ),
     );
   }
 }

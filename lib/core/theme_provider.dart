@@ -9,32 +9,75 @@ class ThemeNotifier extends Notifier<ThemeMode> {
 
   @override
   ThemeMode build() {
-    // Load persisted value asynchronously; start with system default (dark)
+    // Kick off async load. State starts as dark; _load() will correct it
+    // on the next frame if the user previously saved light mode.
+    //
+    // To eliminate the flash entirely, call ThemeNotifier.preload() before
+    // runApp() and pass the result to ProviderScope overrides:
+    //
+    //   final saved = await ThemeNotifier.preload();
+    //   runApp(ProviderScope(
+    //     overrides: [themeProvider.overrideWith(() => ThemeNotifier()
+    //         ..state = saved)],
+    //     child: FrameonApp(),
+    //   ));
     _load();
     return ThemeMode.dark;
   }
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
-    final value = prefs.getString(_prefKey);
-    if (value != null) {
-      state = value == 'light' ? ThemeMode.light : ThemeMode.dark;
+    final raw = prefs.getString(_prefKey);
+    if (raw != null) {
+      state = _fromString(raw);
     }
   }
 
-  Future<void> toggle() async {
-    state = state == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+  /// Call this before [runApp] to read the saved theme synchronously-ish,
+  /// avoiding the dark-mode flash on startup.
+  static Future<ThemeMode> preload() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_prefKey, state == ThemeMode.light ? 'light' : 'dark');
+    return _fromString(prefs.getString(_prefKey));
+  }
+
+  Future<void> toggle() async {
+    final next = state == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    // Persist first so we never store a value that doesn't match the UI.
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefKey, _toString(next));
+    state = next;
   }
 
   Future<void> setMode(ThemeMode mode) async {
-    state = mode;
+    if (mode == ThemeMode.system) {
+      // system is not surfaced in the UI; treat as a no-op to avoid
+      // storing a value we can't round-trip.
+      return;
+    }
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_prefKey, mode == ThemeMode.light ? 'light' : 'dark');
+    await prefs.setString(_prefKey, _toString(mode));
+    state = mode;
   }
 
   bool get isDark => state == ThemeMode.dark;
+
+  // ── Serialisation helpers ─────────────────────────────────────
+
+  static ThemeMode _fromString(String? value) {
+    switch (value) {
+      case 'light':  return ThemeMode.light;
+      case 'dark':   return ThemeMode.dark;
+      default:       return ThemeMode.dark; // safe fallback
+    }
+  }
+
+  static String _toString(ThemeMode mode) {
+    switch (mode) {
+      case ThemeMode.light:  return 'light';
+      case ThemeMode.dark:   return 'dark';
+      case ThemeMode.system: return 'dark'; // never reached via setMode
+    }
+  }
 }
 
 final themeProvider = NotifierProvider<ThemeNotifier, ThemeMode>(

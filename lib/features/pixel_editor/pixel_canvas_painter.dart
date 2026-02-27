@@ -7,12 +7,25 @@ class PixelCanvasPainter extends CustomPainter {
   final List<Color> pixels;
   final double pixelSize;
   final bool showGrid;
+  final bool isDark;
 
   const PixelCanvasPainter({
     required this.pixels,
     required this.pixelSize,
     this.showGrid = true,
+    this.isDark = true,
   });
+
+  // Canvas background — near-black in dark mode, very dark grey in light mode
+  // so the LED glow still reads well against it.
+  Color get _bgColor => isDark
+      ? const Color(0xFF080810)
+      : const Color(0xFF111118);
+
+  // Grid lines — subtle in both modes
+  Color get _gridColor => isDark
+      ? const Color(0xFF1A1A2E)
+      : const Color(0xFF2A2A3A);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -24,22 +37,20 @@ class PixelCanvasPainter extends CustomPainter {
   void _drawBackground(Canvas canvas, Size size) {
     canvas.drawRect(
       Rect.fromLTWH(0, 0, size.width, size.height),
-      Paint()..color = const Color(0xFF080810),
+      Paint()..color = _bgColor,
     );
   }
 
   void _drawGrid(Canvas canvas, Size size) {
     final gridPaint = Paint()
-      ..color = const Color(0xFF1A1A2E)
+      ..color = _gridColor
       ..strokeWidth = 0.5
       ..style = PaintingStyle.stroke;
 
-    // Vertical lines
     for (int col = 0; col <= kCols; col++) {
       final x = col * pixelSize;
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
     }
-    // Horizontal lines
     for (int row = 0; row <= kRows; row++) {
       final y = row * pixelSize;
       canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
@@ -60,10 +71,8 @@ class PixelCanvasPainter extends CustomPainter {
         pixelSize - 1,
       );
 
-      // Base pixel fill
       canvas.drawRect(rect, Paint()..color = color);
 
-      // LED glow effect using MaskFilter
       if (pixelSize >= 8) {
         final glowPaint = Paint()
           ..color = color.withValues(alpha: 0.35)
@@ -77,11 +86,14 @@ class PixelCanvasPainter extends CustomPainter {
   bool shouldRepaint(PixelCanvasPainter oldDelegate) {
     return oldDelegate.pixels != pixels ||
         oldDelegate.pixelSize != pixelSize ||
-        oldDelegate.showGrid != showGrid;
+        oldDelegate.showGrid != showGrid ||
+        oldDelegate.isDark != isDark;
   }
 }
 
 /// Lightweight painter for the mini preview (no grid, no glow).
+/// The LED canvas itself is always rendered on black regardless of app theme —
+/// that matches a real LED matrix display.
 class PixelPreviewPainter extends CustomPainter {
   final List<Color> pixels;
 

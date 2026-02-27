@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:frameon/core/ble/ble_uuids.dart';
+import '../../core/app_theme.dart';
 import '../../core/ble/ble_providers.dart';
 import '../../core/ble/ble_manager.dart';
 import '../ui/connection_status.dart';
@@ -28,12 +29,12 @@ class ClockScreen extends ConsumerStatefulWidget {
 
 class _ClockScreenState extends ConsumerState<ClockScreen> {
   ClockFormat _format = ClockFormat.h24;
-  ClockStyle _style = ClockStyle.digital;
-  ClockColor _color = ClockColor.green;
+  ClockStyle  _style  = ClockStyle.digital;
+  ClockColor  _color  = ClockColor.green;
   bool _showSeconds = false;
-  bool _showDate = false;
-  bool _blinkColon = true;
-  bool _isLive = false;
+  bool _showDate    = false;
+  bool _blinkColon  = true;
+  bool _isLive      = false;
 
   late Timer _ticker;
   DateTime _now = DateTime.now();
@@ -56,10 +57,14 @@ class _ClockScreenState extends ConsumerState<ClockScreen> {
     super.dispose();
   }
 
+  // ── Time formatting ───────────────────────────────────────────
+
   String get _timeString {
     final h = _format == ClockFormat.h24
         ? _now.hour.toString().padLeft(2, '0')
-        : (_now.hour % 12 == 0 ? 12 : _now.hour % 12).toString().padLeft(2, '0');
+        : (_now.hour % 12 == 0 ? 12 : _now.hour % 12)
+            .toString()
+            .padLeft(2, '0');
     final m = _now.minute.toString().padLeft(2, '0');
     final s = _now.second.toString().padLeft(2, '0');
     final colon = _blinkColon && _colonVisible ? ':' : ' ';
@@ -67,12 +72,17 @@ class _ClockScreenState extends ConsumerState<ClockScreen> {
   }
 
   String get _dateString {
-    final months = ['JAN','FEB','MAR','APR','MAY','JUN',
-                    'JUL','AUG','SEP','OCT','NOV','DEC'];
-    return '${_now.day.toString().padLeft(2,'0')} ${months[_now.month-1]} ${_now.year}';
+    const months = [
+      'JAN','FEB','MAR','APR','MAY','JUN',
+      'JUL','AUG','SEP','OCT','NOV','DEC',
+    ];
+    return '${_now.day.toString().padLeft(2,'0')} '
+        '${months[_now.month-1]} ${_now.year}';
   }
 
   String get _amPm => _now.hour < 12 ? 'AM' : 'PM';
+
+  // ── Device commands ───────────────────────────────────────────
 
   Future<void> _toggleClockMode() async {
     final bleManager = ref.read(bleManagerProvider);
@@ -83,7 +93,6 @@ class _ClockScreenState extends ConsumerState<ClockScreen> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('No device connected.',
               style: TextStyle(fontFamily: 'monospace')),
-          backgroundColor: Color(0xFF1A0A0A),
         ));
         return;
       }
@@ -99,7 +108,6 @@ class _ClockScreenState extends ConsumerState<ClockScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Error: $e',
               style: const TextStyle(fontFamily: 'monospace')),
-          backgroundColor: const Color(0xFF1A0A0A),
         ));
       }
     } else {
@@ -115,7 +123,6 @@ class _ClockScreenState extends ConsumerState<ClockScreen> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('No device connected.',
             style: TextStyle(fontFamily: 'monospace')),
-        backgroundColor: Color(0xFF1A0A0A),
       ));
       return;
     }
@@ -128,14 +135,12 @@ class _ClockScreenState extends ConsumerState<ClockScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('✓ Time synced: ${_now.toIso8601String()}',
             style: const TextStyle(fontFamily: 'monospace')),
-        backgroundColor: const Color(0xFF0A1A0A),
         duration: const Duration(seconds: 2),
       ));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Sync error: $e',
             style: const TextStyle(fontFamily: 'monospace')),
-        backgroundColor: const Color(0xFF1A0A0A),
       ));
     }
   }
@@ -144,67 +149,72 @@ class _ClockScreenState extends ConsumerState<ClockScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
     final accent = kClockColors[_color]!;
     final bleManager = ref.watch(bleManagerProvider);
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0F),
+      backgroundColor: colors.background,
       body: Column(children: [
-        _buildHeader(accent),
+        _buildHeader(colors, accent),
         ConnectionStatusBar(
           manager: bleManager,
           onTap: () => DeviceScannerSheet.show(context, bleManager),
         ),
         Expanded(
           child: Row(children: [
-            Expanded(child: _buildPreviewPanel(accent)),
-            _buildRightPanel(accent),
+            Expanded(child: _buildPreviewPanel(colors, accent)),
+            _buildRightPanel(colors, accent),
           ]),
         ),
-        _buildStatusBar(accent),
+        _buildStatusBar(colors, accent),
       ]),
     );
   }
 
-  Widget _buildHeader(Color accent) {
+  // ── Header ────────────────────────────────────────────────────
+
+  Widget _buildHeader(AppColors colors, Color accent) {
     return Container(
       height: 48,
-      decoration: const BoxDecoration(
-        color: Color(0xFF0D0D1A),
-        border: Border(bottom: BorderSide(color: Color(0xFF1A1A2E))),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(bottom: BorderSide(color: colors.border)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(children: [
         GestureDetector(
           onTap: () => Navigator.pop(context),
-          child: const Icon(Icons.arrow_back_ios, color: Color(0xFF444444), size: 16),
+          child: Icon(Icons.arrow_back_ios, color: colors.textMuted, size: 16),
         ),
         const SizedBox(width: 16),
-        const Text('CLOCK', style: TextStyle(
+        Text('CLOCK', style: TextStyle(
           fontSize: 13, fontWeight: FontWeight.bold,
-          letterSpacing: 2, color: Colors.white, fontFamily: 'monospace',
+          letterSpacing: 2, color: colors.textPrimary, fontFamily: 'monospace',
         )),
         const SizedBox(width: 10),
-        const Text('LED MATRIX DISPLAY', style: TextStyle(
-          fontSize: 11, color: Color(0xFF444444),
+        Text('LED MATRIX DISPLAY', style: TextStyle(
+          fontSize: 11, color: colors.textMuted,
           letterSpacing: 1.5, fontFamily: 'monospace',
         )),
         const Spacer(),
-        if (_isLive)
-          _LiveBadge(color: accent),
+        if (_isLive) _LiveBadge(color: accent),
         const SizedBox(width: 8),
         const ThemeToggleButton(),
       ]),
     );
   }
 
-  Widget _buildPreviewPanel(Color accent) {
+  // ── Preview panel ─────────────────────────────────────────────
+
+  Widget _buildPreviewPanel(AppColors colors, Color accent) {
     return Padding(
       padding: const EdgeInsets.all(32),
       child: Column(children: [
-        // Large clock display
         Expanded(
           child: Container(
             decoration: BoxDecoration(
+              // The clock face simulates the LED panel — always black
               color: Colors.black,
               border: Border.all(color: accent.withValues(alpha: 0.2)),
               borderRadius: BorderRadius.circular(8),
@@ -217,7 +227,6 @@ class _ClockScreenState extends ConsumerState<ClockScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Clock time
                   Text(
                     _timeString,
                     style: TextStyle(
@@ -226,13 +235,15 @@ class _ClockScreenState extends ConsumerState<ClockScreen> {
                       color: accent,
                       fontFamily: 'monospace',
                       letterSpacing: _style == ClockStyle.minimal ? 8 : 4,
-                      shadows: [Shadow(color: accent.withValues(alpha: 0.5), blurRadius: 20)],
+                      shadows: [Shadow(
+                          color: accent.withValues(alpha: 0.5), blurRadius: 20)],
                     ),
                   ),
                   if (_format == ClockFormat.h12) ...[
                     const SizedBox(height: 4),
                     Text(_amPm, style: TextStyle(
-                      fontSize: 18, color: accent.withValues(alpha: 0.6),
+                      fontSize: 18,
+                      color: accent.withValues(alpha: 0.6),
                       fontFamily: 'monospace', letterSpacing: 4,
                     )),
                   ],
@@ -244,7 +255,8 @@ class _ClockScreenState extends ConsumerState<ClockScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text(_dateString, style: TextStyle(
-                      fontSize: 16, color: accent.withValues(alpha: 0.5),
+                      fontSize: 16,
+                      color: accent.withValues(alpha: 0.5),
                       fontFamily: 'monospace', letterSpacing: 3,
                     )),
                   ],
@@ -253,24 +265,23 @@ class _ClockScreenState extends ConsumerState<ClockScreen> {
             ),
           ),
         ),
-
         const SizedBox(height: 20),
-
-        // Matrix simulation strip (64×32 ratio)
-        _buildMatrixSimulation(accent),
+        _buildMatrixSimulation(colors, accent),
       ]),
     );
   }
 
-  Widget _buildMatrixSimulation(Color accent) {
+  Widget _buildMatrixSimulation(AppColors colors, Color accent) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(children: [
-          const _SectionLabel('MATRIX PREVIEW'),
+          _SectionLabel('MATRIX PREVIEW', colors),
           const Spacer(),
           Text('64 × 32 LED', style: TextStyle(
-            fontSize: 9, color: accent.withValues(alpha: 0.3), fontFamily: 'monospace',
+            fontSize: 9,
+            color: accent.withValues(alpha: 0.4),
+            fontFamily: 'monospace',
           )),
         ]),
         const SizedBox(height: 8),
@@ -292,12 +303,14 @@ class _ClockScreenState extends ConsumerState<ClockScreen> {
                     fontWeight: FontWeight.bold,
                     color: accent,
                     fontFamily: 'monospace',
-                    shadows: [Shadow(color: accent.withValues(alpha: 0.6), blurRadius: 8)],
+                    shadows: [Shadow(
+                        color: accent.withValues(alpha: 0.6), blurRadius: 8)],
                   ),
                 ),
                 if (_showDate)
                   Text(_dateString, style: TextStyle(
-                    fontSize: 7, color: accent.withValues(alpha: 0.5),
+                    fontSize: 7,
+                    color: accent.withValues(alpha: 0.5),
                     fontFamily: 'monospace',
                   )),
               ],
@@ -308,44 +321,46 @@ class _ClockScreenState extends ConsumerState<ClockScreen> {
     );
   }
 
-  Widget _buildRightPanel(Color accent) {
+  // ── Right panel ───────────────────────────────────────────────
+
+  Widget _buildRightPanel(AppColors colors, Color accent) {
     return Container(
       width: 220,
-      decoration: const BoxDecoration(
-        color: Color(0xFF0D0D1A),
-        border: Border(left: BorderSide(color: Color(0xFF1A1A2E))),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(left: BorderSide(color: colors.border)),
       ),
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const _SectionLabel('COLOR'),
+            _SectionLabel('COLOR', colors),
             const SizedBox(height: 10),
-            _buildColorRow(),
+            _buildColorRow(colors),
             const SizedBox(height: 20),
-            const _SectionLabel('FORMAT'),
+            _SectionLabel('FORMAT', colors),
             const SizedBox(height: 10),
-            _buildFormatToggle(accent),
+            _buildFormatToggle(colors, accent),
             const SizedBox(height: 20),
-            const _SectionLabel('STYLE'),
+            _SectionLabel('STYLE', colors),
             const SizedBox(height: 10),
-            _buildStyleSelector(accent),
+            _buildStyleSelector(colors, accent),
             const SizedBox(height: 20),
-            const _SectionLabel('OPTIONS'),
+            _SectionLabel('OPTIONS', colors),
             const SizedBox(height: 10),
-            _buildToggle('SHOW SECONDS', _showSeconds, accent,
+            _buildToggle('SHOW SECONDS', _showSeconds, accent, colors,
                 (v) => setState(() => _showSeconds = v)),
             const SizedBox(height: 8),
-            _buildToggle('SHOW DATE', _showDate, accent,
+            _buildToggle('SHOW DATE', _showDate, accent, colors,
                 (v) => setState(() => _showDate = v)),
             const SizedBox(height: 8),
-            _buildToggle('BLINK COLON', _blinkColon, accent,
+            _buildToggle('BLINK COLON', _blinkColon, accent, colors,
                 (v) => setState(() => _blinkColon = v)),
             const SizedBox(height: 24),
             _ActionButton(
               label: _isLive ? 'STOP CLOCK' : 'SEND TO DEVICE',
-              color: _isLive ? const Color(0xFFFF2D2D) : const Color(0xFF00B4FF),
+              color: _isLive ? colors.accentRed : colors.accentBlue,
               onTap: _toggleClockMode,
             ),
             const SizedBox(height: 8),
@@ -360,7 +375,7 @@ class _ClockScreenState extends ConsumerState<ClockScreen> {
     );
   }
 
-  Widget _buildColorRow() {
+  Widget _buildColorRow(AppColors colors) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: ClockColor.values.map((c) {
@@ -374,11 +389,14 @@ class _ClockScreenState extends ConsumerState<ClockScreen> {
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.15),
               border: Border.all(
-                color: selected ? color : const Color(0xFF222222),
+                color: selected ? color : colors.border,
                 width: selected ? 2 : 1,
               ),
               borderRadius: BorderRadius.circular(6),
-              boxShadow: selected ? [BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 8)] : null,
+              boxShadow: selected
+                  ? [BoxShadow(
+                      color: color.withValues(alpha: 0.4), blurRadius: 8)]
+                  : null,
             ),
             child: Center(
               child: Container(
@@ -392,39 +410,40 @@ class _ClockScreenState extends ConsumerState<ClockScreen> {
     );
   }
 
-  Widget _buildFormatToggle(Color accent) {
+  Widget _buildFormatToggle(AppColors colors, Color accent) {
     return Container(
       decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFF222222)),
+        border: Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(5),
       ),
       child: Row(children: [
-        _FormatTab('24H', _format == ClockFormat.h24, accent,
+        _FormatTab('24H', _format == ClockFormat.h24, accent, colors,
             () => setState(() => _format = ClockFormat.h24)),
-        _FormatTab('12H', _format == ClockFormat.h12, accent,
+        _FormatTab('12H', _format == ClockFormat.h12, accent, colors,
             () => setState(() => _format = ClockFormat.h12)),
       ]),
     );
   }
 
-  Widget _buildStyleSelector(Color accent) {
+  Widget _buildStyleSelector(AppColors colors, Color accent) {
     const styles = [
-      (ClockStyle.digital, 'DIGITAL',  'Standard LED font'),
-      (ClockStyle.minimal, 'MINIMAL',  'Wide spaced, clean'),
-      (ClockStyle.blocky,  'BLOCKY',   'Large bold digits'),
+      (ClockStyle.digital, 'DIGITAL', 'Standard LED font'),
+      (ClockStyle.minimal, 'MINIMAL', 'Wide spaced, clean'),
+      (ClockStyle.blocky,  'BLOCKY',  'Large bold digits'),
     ];
     return Column(
       children: styles.map((s) {
         final active = _style == s.$1;
         return GestureDetector(
           onTap: () => setState(() => _style = s.$1),
-          child: Container(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
             margin: const EdgeInsets.only(bottom: 6),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: active ? accent.withValues(alpha: 0.08) : Colors.transparent,
               border: Border.all(
-                color: active ? accent : const Color(0xFF222222),
+                color: active ? accent : colors.border,
               ),
               borderRadius: BorderRadius.circular(5),
             ),
@@ -433,18 +452,18 @@ class _ClockScreenState extends ConsumerState<ClockScreen> {
                 width: 6, height: 6,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: active ? accent : const Color(0xFF333333),
+                  color: active ? accent : colors.textMuted,
                 ),
               ),
               const SizedBox(width: 10),
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(s.$2, style: TextStyle(
                   fontSize: 10, fontWeight: FontWeight.bold,
-                  color: active ? accent : const Color(0xFF555555),
+                  color: active ? accent : colors.textSecondary,
                   letterSpacing: 1, fontFamily: 'monospace',
                 )),
-                Text(s.$3, style: const TextStyle(
-                  fontSize: 9, color: Color(0xFF333333), fontFamily: 'monospace',
+                Text(s.$3, style: TextStyle(
+                  fontSize: 9, color: colors.textMuted, fontFamily: 'monospace',
                 )),
               ]),
             ]),
@@ -454,57 +473,75 @@ class _ClockScreenState extends ConsumerState<ClockScreen> {
     );
   }
 
-  Widget _buildToggle(String label, bool value, Color accent, ValueChanged<bool> onChanged) {
+  Widget _buildToggle(
+    String label,
+    bool value,
+    Color accent,
+    AppColors colors,
+    ValueChanged<bool> onChanged,
+  ) {
     return GestureDetector(
       onTap: () => onChanged(!value),
       child: Row(children: [
-        Container(
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
           width: 32, height: 18,
           decoration: BoxDecoration(
-            color: value ? accent.withValues(alpha: 0.15) : const Color(0xFF1A1A2E),
-            border: Border.all(color: value ? accent : const Color(0xFF333333)),
+            color: value
+                ? colors.toggleActive.withValues(alpha: 0.15)
+                : colors.toggleInactive,
+            border: Border.all(
+              color: value ? colors.toggleActive : colors.border,
+            ),
             borderRadius: BorderRadius.circular(9),
           ),
           child: AnimatedAlign(
             duration: const Duration(milliseconds: 150),
-            alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+            alignment:
+                value ? Alignment.centerRight : Alignment.centerLeft,
             child: Container(
               width: 12, height: 12,
               margin: const EdgeInsets.symmetric(horizontal: 2),
               decoration: BoxDecoration(
-                color: value ? accent : const Color(0xFF333333),
+                color: value ? colors.toggleActive : colors.textMuted,
                 shape: BoxShape.circle,
               ),
             ),
           ),
         ),
         const SizedBox(width: 10),
-        Text(label, style: const TextStyle(
-          fontSize: 10, color: Color(0xFF555555),
+        Text(label, style: TextStyle(
+          fontSize: 10, color: colors.textSecondary,
           letterSpacing: 1, fontFamily: 'monospace',
         )),
       ]),
     );
   }
 
-  Widget _buildStatusBar(Color accent) {
+  // ── Status bar ────────────────────────────────────────────────
+
+  Widget _buildStatusBar(AppColors colors, Color accent) {
     return Container(
       height: 28,
-      decoration: const BoxDecoration(
-        color: Color(0xFF0D0D1A),
-        border: Border(top: BorderSide(color: Color(0xFF1A1A2E))),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(top: BorderSide(color: colors.border)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(children: [
-        _StatusItem('FORMAT', _format == ClockFormat.h24 ? '24H' : '12H', accent),
+        _StatusItem('FORMAT',
+            _format == ClockFormat.h24 ? '24H' : '12H', accent, colors),
         const SizedBox(width: 24),
-        _StatusItem('COLOR', _color.name.toUpperCase(), accent),
+        _StatusItem('COLOR', _color.name.toUpperCase(), accent, colors),
         const SizedBox(width: 24),
-        _StatusItem('STYLE', _style.name.toUpperCase(), const Color(0xFF666666)),
+        _StatusItem('STYLE', _style.name.toUpperCase(),
+            colors.textSecondary, colors),
         const Spacer(),
-        Text(_now.toLocal().toString().substring(0, 19),
-          style: const TextStyle(fontSize: 9, color: Color(0xFF333333),
-            fontFamily: 'monospace')),
+        Text(
+          _now.toLocal().toString().substring(0, 19),
+          style: TextStyle(
+            fontSize: 9, color: colors.textMuted, fontFamily: 'monospace'),
+        ),
       ]),
     );
   }
@@ -525,7 +562,8 @@ class _LiveBadgeState extends State<_LiveBadge>
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(seconds: 1))
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(seconds: 1))
       ..repeat(reverse: true);
   }
   @override
@@ -536,13 +574,18 @@ class _LiveBadgeState extends State<_LiveBadge>
     builder: (_, __) => Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: widget.color.withValues(alpha: 0.05 + _ctrl.value * 0.1),
-        border: Border.all(color: widget.color.withValues(alpha: 0.4 + _ctrl.value * 0.4)),
+        color: widget.color
+            .withValues(alpha: 0.05 + _ctrl.value * 0.1),
+        border: Border.all(
+          color: widget.color
+              .withValues(alpha: 0.4 + _ctrl.value * 0.4)),
         borderRadius: BorderRadius.circular(3),
       ),
       child: Row(children: [
-        Container(width: 5, height: 5,
-          decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle)),
+        Container(
+          width: 5, height: 5,
+          decoration: BoxDecoration(
+              color: widget.color, shape: BoxShape.circle)),
         const SizedBox(width: 6),
         Text('LIVE', style: TextStyle(
           fontSize: 9, color: widget.color,
@@ -557,13 +600,16 @@ class _FormatTab extends StatelessWidget {
   final String label;
   final bool active;
   final Color accent;
+  final AppColors colors;
   final VoidCallback onTap;
-  const _FormatTab(this.label, this.active, this.accent, this.onTap);
+  const _FormatTab(this.label, this.active, this.accent, this.colors, this.onTap);
+
   @override
   Widget build(BuildContext context) => Expanded(
     child: GestureDetector(
       onTap: onTap,
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
           color: active ? accent.withValues(alpha: 0.12) : Colors.transparent,
@@ -571,7 +617,7 @@ class _FormatTab extends StatelessWidget {
         ),
         child: Text(label, textAlign: TextAlign.center, style: TextStyle(
           fontSize: 11, fontWeight: FontWeight.bold,
-          color: active ? accent : const Color(0xFF444444),
+          color: active ? accent : colors.textMuted,
           letterSpacing: 1, fontFamily: 'monospace',
         )),
       ),
@@ -581,10 +627,11 @@ class _FormatTab extends StatelessWidget {
 
 class _SectionLabel extends StatelessWidget {
   final String text;
-  const _SectionLabel(this.text);
+  final AppColors colors;
+  const _SectionLabel(this.text, this.colors);
   @override
-  Widget build(BuildContext context) => Text(text, style: const TextStyle(
-    fontSize: 9, letterSpacing: 2, color: Color(0xFF333333),
+  Widget build(BuildContext context) => Text(text, style: TextStyle(
+    fontSize: 9, letterSpacing: 2, color: colors.textMuted,
     fontWeight: FontWeight.bold, fontFamily: 'monospace',
   ));
 }
@@ -593,7 +640,8 @@ class _ActionButton extends StatelessWidget {
   final String label;
   final Color color;
   final VoidCallback onTap;
-  const _ActionButton({required this.label, required this.color, required this.onTap});
+  const _ActionButton(
+      {required this.label, required this.color, required this.onTap});
   @override
   Widget build(BuildContext context) => GestureDetector(
     onTap: onTap,
@@ -616,11 +664,12 @@ class _ActionButton extends StatelessWidget {
 class _StatusItem extends StatelessWidget {
   final String label, value;
   final Color valueColor;
-  const _StatusItem(this.label, this.value, this.valueColor);
+  final AppColors colors;
+  const _StatusItem(this.label, this.value, this.valueColor, this.colors);
   @override
   Widget build(BuildContext context) => Row(children: [
-    Text('$label: ', style: const TextStyle(
-      fontSize: 10, color: Color(0xFF333333), fontFamily: 'monospace',
+    Text('$label: ', style: TextStyle(
+      fontSize: 10, color: colors.textMuted, fontFamily: 'monospace',
     )),
     Text(value, style: TextStyle(
       fontSize: 10, color: valueColor, fontFamily: 'monospace',

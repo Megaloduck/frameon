@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/ble/ble_manager.dart';
 
@@ -19,14 +20,34 @@ class ConnectionStatusBar extends StatefulWidget {
 
 class _ConnectionStatusBarState extends State<ConnectionStatusBar> {
   late FrameonConnectionState _state;
+  StreamSubscription<FrameonConnectionState>? _sub; // ← store subscription
 
   @override
   void initState() {
     super.initState();
     _state = widget.manager.state;
-    widget.manager.connectionStateStream.listen((s) {
+    _sub = widget.manager.connectionStateStream.listen((s) {
       if (mounted) setState(() => _state = s);
     });
+  }
+
+  @override
+  void didUpdateWidget(ConnectionStatusBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // If the manager instance changes, re-subscribe to the new stream.
+    if (oldWidget.manager != widget.manager) {
+      _sub?.cancel();
+      _state = widget.manager.state;
+      _sub = widget.manager.connectionStateStream.listen((s) {
+        if (mounted) setState(() => _state = s);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel(); // ← always cancel on dispose
+    super.dispose();
   }
 
   @override
@@ -45,8 +66,11 @@ class _ConnectionStatusBarState extends State<ConnectionStatusBar> {
         ),
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Row(children: [
-          _StateDot(color: color, animate: _state == FrameonConnectionState.scanning ||
-              _state == FrameonConnectionState.connecting),
+          _StateDot(
+            color: color,
+            animate: _state == FrameonConnectionState.scanning ||
+                _state == FrameonConnectionState.connecting,
+          ),
           const SizedBox(width: 8),
           Text(label, style: TextStyle(
             fontSize: 9, color: color,
@@ -56,7 +80,9 @@ class _ConnectionStatusBarState extends State<ConnectionStatusBar> {
           Icon(icon, color: color.withValues(alpha: 0.5), size: 13),
           const SizedBox(width: 4),
           Text(
-            _state == FrameonConnectionState.connected ? 'TAP TO DISCONNECT' : 'TAP TO CONNECT',
+            _state == FrameonConnectionState.connected
+                ? 'TAP TO DISCONNECT'
+                : 'TAP TO CONNECT',
             style: TextStyle(
               fontSize: 8, color: color.withValues(alpha: 0.4),
               letterSpacing: 1, fontFamily: 'monospace',
@@ -109,39 +135,52 @@ class _DeviceScannerSheetState extends State<DeviceScannerSheet> {
   List<FrameonDevice> _devices = [];
   FrameonConnectionState _state = FrameonConnectionState.disconnected;
 
+  // ← Store all subscriptions so they can be cancelled on dispose.
+  final List<StreamSubscription> _subs = [];
+
   @override
   void initState() {
     super.initState();
     _state = widget.manager.state;
 
-    widget.manager.connectionStateStream.listen((s) {
+    _subs.add(widget.manager.connectionStateStream.listen((s) {
       if (mounted) setState(() => _state = s);
-    });
+    }));
 
-    widget.manager.devicesStream.listen((devices) {
+    _subs.add(widget.manager.devicesStream.listen((devices) {
       if (mounted) setState(() => _devices = devices);
-    });
+    }));
 
-    widget.manager.errorStream.listen((err) {
+    _subs.add(widget.manager.errorStream.listen((err) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(err, style: const TextStyle(fontFamily: 'monospace')),
           backgroundColor: const Color(0xFF1A0A0A),
         ));
       }
-    });
+    }));
 
     _startScan();
+  }
+
+  @override
+  void dispose() {
+    for (final sub in _subs) {
+      sub.cancel();
+    }
+    super.dispose();
   }
 
   Future<void> _startScan() async {
     final granted = await widget.manager.requestPermissions();
     if (!granted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Bluetooth permissions required',
-            style: TextStyle(fontFamily: 'monospace')),
-        backgroundColor: Color(0xFF1A0A0A),
-      ));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Bluetooth permissions required',
+              style: TextStyle(fontFamily: 'monospace')),
+          backgroundColor: Color(0xFF1A0A0A),
+        ));
+      }
       return;
     }
     widget.manager.startScan();
@@ -246,7 +285,8 @@ class _DeviceScannerSheetState extends State<DeviceScannerSheet> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
-                  border: Border.all(color: const Color(0xFFFF2D2D).withValues(alpha: 0.4)),
+                  border: Border.all(
+                      color: const Color(0xFFFF2D2D).withValues(alpha: 0.4)),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: const Text('DISCONNECT', textAlign: TextAlign.center,
@@ -329,9 +369,8 @@ class _DeviceTile extends StatelessWidget {
 
 // ── Transfer progress bar ─────────────────────────────────────────────────────
 
-/// Slim progress indicator shown during BLE frame transfer.
 class TransferProgressBar extends StatelessWidget {
-  final double progress; // 0.0 – 1.0
+  final double progress;
   final String label;
   final Color color;
 
@@ -431,7 +470,8 @@ class _StateDotState extends State<_StateDot>
       builder: (_, __) => Container(
         width: 6, height: 6,
         decoration: BoxDecoration(
-          color: widget.color.withValues(alpha: widget.animate ? 0.4 + _ctrl.value * 0.6 : 1.0),
+          color: widget.color.withValues(
+              alpha: widget.animate ? 0.4 + _ctrl.value * 0.6 : 1.0),
           shape: BoxShape.circle,
           boxShadow: [BoxShadow(
             color: widget.color.withValues(alpha: 0.4),

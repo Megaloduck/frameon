@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:image/image.dart' as img;
 import 'frame_model.dart';
 
@@ -45,12 +46,21 @@ class Rgb565Encoder {
   }
 
   /// Encode raw RGBA bytes (e.g. from Flutter's toByteData) into a [FrameData].
+  ///
+  /// [rgba] must be a flat list of bytes in RGBA order (4 bytes per pixel).
   /// [width] and [height] must match the actual pixel dimensions.
   FrameData encodeRgba(List<int> rgba, int width, int height) {
+    // Convert to a proper Uint8List so img.Image.fromBytes receives a
+    // ByteBuffer — previously this returned a plain List<int>, which caused
+    // a runtime type error inside the image library.
+    final Uint8List bytes = rgba is Uint8List
+        ? rgba
+        : Uint8List.fromList(rgba);
+
     final image = img.Image.fromBytes(
       width: width,
       height: height,
-      bytes: rgba is List<int> ? Uint8ListHelper.fromList(rgba).buffer : throw ArgumentError('Need List<int>'),
+      bytes: bytes.buffer,
       format: img.Format.uint8,
       numChannels: 4,
     );
@@ -93,11 +103,17 @@ class Rgb565Encoder {
   List<int> _encodeWithDithering(img.Image image) {
     // Work in floating-point RGB to accumulate error.
     final r = List<double>.generate(kMatrixPixels,
-        (i) => _applyBrightness(image.getPixel(i % kMatrixCols, i ~/ kMatrixCols).r.toInt()).toDouble());
+        (i) => _applyBrightness(
+            image.getPixel(i % kMatrixCols, i ~/ kMatrixCols).r.toInt())
+            .toDouble());
     final g = List<double>.generate(kMatrixPixels,
-        (i) => _applyBrightness(image.getPixel(i % kMatrixCols, i ~/ kMatrixCols).g.toInt()).toDouble());
+        (i) => _applyBrightness(
+            image.getPixel(i % kMatrixCols, i ~/ kMatrixCols).g.toInt())
+            .toDouble());
     final b = List<double>.generate(kMatrixPixels,
-        (i) => _applyBrightness(image.getPixel(i % kMatrixCols, i ~/ kMatrixCols).b.toInt()).toDouble());
+        (i) => _applyBrightness(
+            image.getPixel(i % kMatrixCols, i ~/ kMatrixCols).b.toInt())
+            .toDouble());
 
     final bytes = <int>[];
 
@@ -161,19 +177,10 @@ class Rgb565Encoder {
   }
 
   /// Pack already-quantised r5, g6, b5 → RGB565 word.
-  int _toRgb565Raw(int r5, int g6, int b5) =>
-      (r5 << 11) | (g6 << 5) | b5;
+  int _toRgb565Raw(int r5, int g6, int b5) => (r5 << 11) | (g6 << 5) | b5;
 
   int _quantise8to5(int v) => (v >> 3) & 0x1F;
   int _quantise8to6(int v) => (v >> 2) & 0x3F;
   int _expand5to8(int v) => (v << 3) | (v >> 2);
   int _expand6to8(int v) => (v << 2) | (v >> 4);
-}
-
-/// Helper to avoid importing dart:typed_data at the call site.
-class Uint8ListHelper {
-  static fromList(List<int> list) {
-    final typed = List<int>.from(list);
-    return typed;
-  }
 }
