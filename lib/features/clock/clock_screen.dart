@@ -7,6 +7,7 @@ import '../../core/ble/ble_providers.dart';
 import '../../core/ble/ble_manager.dart';
 import '../ui/connection_status.dart';
 import '../ui/theme_switcher.dart';
+import '../ui/led_matrix_preview.dart';
 
 enum ClockFormat { h24, h12 }
 enum ClockStyle { digital, minimal, blocky }
@@ -278,49 +279,47 @@ class _ClockScreenState extends ConsumerState<ClockScreen> {
         Row(children: [
           _SectionLabel('MATRIX PREVIEW', colors),
           const Spacer(),
-          Text('64 × 32 LED', style: TextStyle(
-            fontSize: 9,
-            color: accent.withValues(alpha: 0.4),
-            fontFamily: 'monospace',
-          )),
-        ]),
-        const SizedBox(height: 8),
-        Container(
-          height: 80,
-          decoration: BoxDecoration(
-            color: Colors.black,
-            border: Border.all(color: accent.withValues(alpha: 0.15)),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  _timeString.replaceAll(' ', ':'),
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: accent,
-                    fontFamily: 'monospace',
-                    shadows: [Shadow(
-                        color: accent.withValues(alpha: 0.6), blurRadius: 8)],
-                  ),
-                ),
-                if (_showDate)
-                  Text(_dateString, style: TextStyle(
-                    fontSize: 7,
-                    color: accent.withValues(alpha: 0.5),
-                    fontFamily: 'monospace',
-                  )),
-              ],
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.08),
+              border: Border.all(color: accent.withValues(alpha: 0.3)),
+              borderRadius: BorderRadius.circular(3),
             ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                width: 5, height: 5,
+                decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 5),
+              Text(
+                _color.name.toUpperCase(),
+                style: TextStyle(
+                  fontSize: 8, color: accent,
+                  fontFamily: 'monospace', letterSpacing: 0.8,
+                ),
+              ),
+            ]),
+          ),
+        ]),
+        const SizedBox(height: 10),
+        // height: 140 → width = 280 (2:1 guaranteed)
+        LedMatrixPreview(
+          height: 140,
+          label: '64 × 32  ·  '
+              '${_format == ClockFormat.h24 ? "24H" : "12H"}'
+              '${_showDate ? "  ·  DATE" : ""}',
+          content: ClockLedContent(
+            timeString: _timeString,
+            dateString: _showDate ? _dateString : null,
+            amPm: _format == ClockFormat.h12 ? _amPm : null,
+            color: accent,
           ),
         ),
       ],
     );
   }
-
+  
   // ── Right panel ───────────────────────────────────────────────
 
   Widget _buildRightPanel(AppColors colors, Color accent) {

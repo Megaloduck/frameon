@@ -7,6 +7,7 @@ import '../../core/ble/ble_manager.dart';
 import '../../core/ble/ble_uuids.dart';
 import '../ui/connection_status.dart';
 import '../ui/theme_switcher.dart';
+import '../ui/led_matrix_preview.dart';
 
 // ── Mock data (replace with real Spotify API responses) ───────────────────────
 
@@ -399,94 +400,61 @@ class _SpotifyScreenState extends ConsumerState<SpotifyScreen>
       ],
     );
   }
-
+  
   Widget _buildMatrixPreview(AppColors colors) {
-    final spotify = colors.accentSpotify;
+    final spotify  = colors.accentSpotify;
+    final progress = _track.durationMs > 0
+        ? _simulatedProgress / _track.durationMs
+        : 0.0;
+
+    final ledLayout = switch (_layout) {
+      SpotifyLayout.artOnly       => SpotifyLedLayout.artOnly,
+      SpotifyLayout.textOnly      => SpotifyLedLayout.textOnly,
+      SpotifyLayout.artAndText    => SpotifyLedLayout.artAndText,
+      SpotifyLayout.scrollingText => SpotifyLedLayout.scrollingText,
+    };
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(children: [
           _SectionLabel('MATRIX PREVIEW', colors),
-          const SizedBox(width: 8),
-          Text('64 × 32', style: TextStyle(
-            fontSize: 9, color: colors.textMuted, fontFamily: 'monospace',
-          )),
-        ]),
-        const SizedBox(height: 8),
-        Container(
-          height: 80,
-          decoration: BoxDecoration(
-            color: Colors.black,
-            border: Border.all(color: spotify.withValues(alpha: 0.2)),
-            borderRadius: BorderRadius.circular(4),
-            boxShadow: [BoxShadow(
-              color: spotify.withValues(alpha: 0.04),
-              blurRadius: 20,
-            )],
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: spotify.withValues(alpha: 0.08),
+              border: Border.all(color: spotify.withValues(alpha: 0.3)),
+              borderRadius: BorderRadius.circular(3),
+            ),
+            child: Text(
+              _layout.name.toUpperCase().replaceAll('_', ' + '),
+              style: TextStyle(
+                fontSize: 8, color: spotify,
+                fontFamily: 'monospace', letterSpacing: 0.8,
+              ),
+            ),
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: _buildLayoutPreview(colors),
+        ]),
+        const SizedBox(height: 10),
+        // height: 140 → width = 280 (2:1 guaranteed)
+        LedMatrixPreview(
+          height: 140,
+          label: '64 × 32  ·  SPOTIFY MODE',
+          content: SpotifyLedContent(
+            title: _track.title,
+            artist: _track.artist,
+            showArtist: _showArtist,
+            trackProgress: progress,
+            showProgress: _showProgress,
+            layout: ledLayout,
+            spotifyColor: spotify,
           ),
         ),
       ],
     );
   }
-
-  Widget _buildLayoutPreview(AppColors colors) {
-    final spotify = colors.accentSpotify;
-    switch (_layout) {
-      case SpotifyLayout.artOnly:
-        return Center(
-          child: Container(
-            width: 60, height: 60,
-            color: spotify.withValues(alpha: 0.3),
-            child: Icon(Icons.music_note, color: spotify, size: 30),
-          ),
-        );
-
-      case SpotifyLayout.textOnly:
-      case SpotifyLayout.scrollingText:
-        final isScrolling = _layout == SpotifyLayout.scrollingText;
-        return Center(
-          child: isScrolling
-              ? AnimatedBuilder(
-                  animation: _scrollCtrl,
-                  builder: (_, __) => Transform.translate(
-                    offset: Offset(-200 * _scrollCtrl.value + 100, 0),
-                    child: _TrackTextDisplay(
-                        track: _track,
-                        showArtist: _showArtist,
-                        spotifyColor: spotify),
-                  ),
-                )
-              : _TrackTextDisplay(
-                  track: _track,
-                  showArtist: _showArtist,
-                  spotifyColor: spotify),
-        );
-
-      case SpotifyLayout.artAndText:
-        return Row(children: [
-          Container(
-            width: 72,
-            color: spotify.withValues(alpha: 0.15),
-            child: Center(
-                child: Icon(Icons.music_note, color: spotify, size: 24)),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: _TrackTextDisplay(
-                  track: _track,
-                  showArtist: _showArtist,
-                  spotifyColor: spotify),
-            ),
-          ),
-        ]);
-    }
-  }
-
+ 
   // ── Right panel ───────────────────────────────────────────────
 
   Widget _buildRightPanel(AppColors colors) {

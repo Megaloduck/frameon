@@ -12,6 +12,7 @@ import '../../core/ble/ble_manager.dart';
 import '../../core/ble/ble_uuids.dart';
 import '../ui/connection_status.dart';
 import '../ui/theme_switcher.dart';
+import '../ui/led_matrix_preview.dart';
 
 enum ResizeMode { stretch, letterbox, crop }
 
@@ -398,49 +399,40 @@ class _MediaUploadScreenState extends ConsumerState<MediaUploadScreen>
       ],
     );
   }
-
+  
   Widget _buildMatrixPreview(AppColors colors) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(children: [
           _SectionLabel('MATRIX PREVIEW', colors),
-          const SizedBox(width: 8),
-          Text('64 × 32', style: TextStyle(
-            fontSize: 9, color: colors.textMuted, fontFamily: 'monospace',
-          )),
           const Spacer(),
           if (_sequence != null && _sequence!.isAnimated)
-            Text('FRAME ${_previewFrame + 1}/${_sequence!.frameCount}',
-              style: TextStyle(fontSize: 9, color: colors.textMuted,
-                fontFamily: 'monospace')),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: colors.accentYellow.withValues(alpha: 0.1),
+                border: Border.all(
+                    color: colors.accentYellow.withValues(alpha: 0.4)),
+                borderRadius: BorderRadius.circular(3),
+              ),
+              child: Text(
+                'FRAME ${_previewFrame + 1} / ${_sequence!.frameCount}',
+                style: TextStyle(
+                  fontSize: 8, color: colors.accentYellow,
+                  fontFamily: 'monospace', letterSpacing: 0.8,
+                ),
+              ),
+            ),
         ]),
-        const SizedBox(height: 8),
-        Container(
-          height: 100,
-          decoration: BoxDecoration(
-            // The matrix preview is always black — it simulates the LED panel
-            color: Colors.black,
-            border: Border.all(color: colors.accent.withValues(alpha: 0.2)),
-            borderRadius: BorderRadius.circular(4),
-            boxShadow: [BoxShadow(
-              color: colors.accent.withValues(alpha: 0.04),
-              blurRadius: 20,
-            )],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: _sequence != null
-                ? _MatrixPreviewPainter(
-                    frame: _sequence!.frames[_previewFrame],
-                  )
-                : Center(
-                    child: Text('NO DATA', style: TextStyle(
-                      fontSize: 9, color: colors.textMuted,
-                      fontFamily: 'monospace',
-                    )),
-                  ),
-          ),
+        const SizedBox(height: 10),
+        // height: 160 → width = 320 (2:1 guaranteed, fits left panel)
+        LedMatrixPreview(
+          height: 160,
+          label: '64 × 32  ·  RGB565',
+          content: _sequence != null
+              ? Rgb565LedContent(bytes: _sequence!.frames[_previewFrame].bytes)
+              : EmptyLedContent(color: colors.accent),
         ),
       ],
     );
