@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../core/app_theme.dart';
 import '../../core/ble/ble_manager.dart';
 
 /// Compact BLE connection status bar shown at the top of feature screens.
@@ -20,7 +21,7 @@ class ConnectionStatusBar extends StatefulWidget {
 
 class _ConnectionStatusBarState extends State<ConnectionStatusBar> {
   late FrameonConnectionState _state;
-  StreamSubscription<FrameonConnectionState>? _sub; // ← store subscription
+  StreamSubscription<FrameonConnectionState>? _sub;
 
   @override
   void initState() {
@@ -34,7 +35,6 @@ class _ConnectionStatusBarState extends State<ConnectionStatusBar> {
   @override
   void didUpdateWidget(ConnectionStatusBar oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // If the manager instance changes, re-subscribe to the new stream.
     if (oldWidget.manager != widget.manager) {
       _sub?.cancel();
       _state = widget.manager.state;
@@ -46,7 +46,7 @@ class _ConnectionStatusBarState extends State<ConnectionStatusBar> {
 
   @override
   void dispose() {
-    _sub?.cancel(); // ← always cancel on dispose
+    _sub?.cancel();
     super.dispose();
   }
 
@@ -109,19 +109,24 @@ class _ConnectionStatusBarState extends State<ConnectionStatusBar> {
   }
 }
 
-/// Full-page device scanner — shown when user taps the connection bar.
+// ── Device scanner bottom sheet ───────────────────────────────────────────────
+
 class DeviceScannerSheet extends StatefulWidget {
   final BleManager manager;
 
   const DeviceScannerSheet({super.key, required this.manager});
 
+  /// Shows the scanner sheet using the current theme's surface color.
+  /// Previously this hardcoded a dark hex value, breaking light mode.
   static Future<void> show(BuildContext context, BleManager manager) {
+    final colors = AppColors.of(context);
     return showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF0D0D1A),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        side: BorderSide(color: Color(0xFF1A1A2E)),
+      // ✅ Was: backgroundColor: const Color(0xFF0D0D1A)  ← hardcoded dark
+      backgroundColor: colors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        side: BorderSide(color: colors.border),
       ),
       builder: (_) => DeviceScannerSheet(manager: manager),
     );
@@ -134,40 +139,31 @@ class DeviceScannerSheet extends StatefulWidget {
 class _DeviceScannerSheetState extends State<DeviceScannerSheet> {
   List<FrameonDevice> _devices = [];
   FrameonConnectionState _state = FrameonConnectionState.disconnected;
-
-  // ← Store all subscriptions so they can be cancelled on dispose.
   final List<StreamSubscription> _subs = [];
 
   @override
   void initState() {
     super.initState();
     _state = widget.manager.state;
-
     _subs.add(widget.manager.connectionStateStream.listen((s) {
       if (mounted) setState(() => _state = s);
     }));
-
     _subs.add(widget.manager.devicesStream.listen((devices) {
       if (mounted) setState(() => _devices = devices);
     }));
-
     _subs.add(widget.manager.errorStream.listen((err) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(err, style: const TextStyle(fontFamily: 'monospace')),
-          backgroundColor: const Color(0xFF1A0A0A),
         ));
       }
     }));
-
     _startScan();
   }
 
   @override
   void dispose() {
-    for (final sub in _subs) {
-      sub.cancel();
-    }
+    for (final sub in _subs) sub.cancel();
     super.dispose();
   }
 
@@ -178,7 +174,6 @@ class _DeviceScannerSheetState extends State<DeviceScannerSheet> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Bluetooth permissions required',
               style: TextStyle(fontFamily: 'monospace')),
-          backgroundColor: Color(0xFF1A0A0A),
         ));
       }
       return;
@@ -188,6 +183,8 @@ class _DeviceScannerSheetState extends State<DeviceScannerSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -199,7 +196,7 @@ class _DeviceScannerSheetState extends State<DeviceScannerSheet> {
             child: Container(
               width: 40, height: 3,
               decoration: BoxDecoration(
-                color: const Color(0xFF333333),
+                color: colors.textMuted,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -208,31 +205,32 @@ class _DeviceScannerSheetState extends State<DeviceScannerSheet> {
 
           // Header
           Row(children: [
-            const Text('FIND DEVICE', style: TextStyle(
+            Text('FIND DEVICE', style: TextStyle(
               fontSize: 13, fontWeight: FontWeight.bold,
-              color: Colors.white, letterSpacing: 2, fontFamily: 'monospace',
+              color: colors.textPrimary,
+              letterSpacing: 2, fontFamily: 'monospace',
             )),
             const Spacer(),
             if (_state == FrameonConnectionState.scanning)
-              const SizedBox(
+              SizedBox(
                 width: 16, height: 16,
                 child: CircularProgressIndicator(
-                  color: Color(0xFF00B4FF), strokeWidth: 1.5,
+                  color: colors.accentBlue, strokeWidth: 1.5,
                 ),
               )
             else
               GestureDetector(
                 onTap: _startScan,
-                child: const Text('SCAN AGAIN', style: TextStyle(
-                  fontSize: 10, color: Color(0xFF00B4FF),
+                child: Text('SCAN AGAIN', style: TextStyle(
+                  fontSize: 10, color: colors.accentBlue,
                   letterSpacing: 1, fontFamily: 'monospace',
                 )),
               ),
           ]),
           const SizedBox(height: 4),
-          const Text('Looking for Frameon devices nearby...',
-            style: TextStyle(fontSize: 10, color: Color(0xFF444444),
-              fontFamily: 'monospace')),
+          Text('Looking for Frameon devices nearby...', style: TextStyle(
+            fontSize: 10, color: colors.textMuted, fontFamily: 'monospace',
+          )),
           const SizedBox(height: 20),
 
           // Device list
@@ -241,19 +239,18 @@ class _DeviceScannerSheetState extends State<DeviceScannerSheet> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 32),
               decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFF1A1A2E)),
+                border: Border.all(color: colors.border),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Column(children: [
-                const Icon(Icons.bluetooth_searching,
-                    color: Color(0xFF333333), size: 32),
+                Icon(Icons.bluetooth_searching, color: colors.textMuted, size: 32),
                 const SizedBox(height: 12),
                 Text(
                   _state == FrameonConnectionState.scanning
                       ? 'Scanning for devices...'
                       : 'No devices found',
-                  style: const TextStyle(fontSize: 11, color: Color(0xFF333333),
-                    fontFamily: 'monospace'),
+                  style: TextStyle(fontSize: 11, color: colors.textMuted,
+                      fontFamily: 'monospace'),
                 ),
               ]),
             )
@@ -262,6 +259,7 @@ class _DeviceScannerSheetState extends State<DeviceScannerSheet> {
               device: d,
               isConnected: widget.manager.connectedDeviceId == d.id,
               isConnecting: _state == FrameonConnectionState.connecting,
+              colors: colors,
               onTap: () async {
                 if (widget.manager.connectedDeviceId == d.id) {
                   await widget.manager.disconnect();
@@ -286,12 +284,12 @@ class _DeviceScannerSheetState extends State<DeviceScannerSheet> {
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
                   border: Border.all(
-                      color: const Color(0xFFFF2D2D).withValues(alpha: 0.4)),
+                      color: colors.accentRed.withValues(alpha: 0.4)),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: const Text('DISCONNECT', textAlign: TextAlign.center,
+                child: Text('DISCONNECT', textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 11, color: Color(0xFFFF2D2D),
+                    fontSize: 11, color: colors.accentRed,
                     letterSpacing: 1.5, fontFamily: 'monospace',
                   )),
               ),
@@ -308,20 +306,20 @@ class _DeviceTile extends StatelessWidget {
   final FrameonDevice device;
   final bool isConnected;
   final bool isConnecting;
+  final AppColors colors;
   final VoidCallback onTap;
 
   const _DeviceTile({
     required this.device,
     required this.isConnected,
     required this.isConnecting,
+    required this.colors,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final color = isConnected
-        ? const Color(0xFF00FF41)
-        : const Color(0xFF00B4FF);
+    final color = isConnected ? colors.accent : colors.accentBlue;
 
     return GestureDetector(
       onTap: isConnecting ? null : onTap,
@@ -340,15 +338,18 @@ class _DeviceTile extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(device.name, style: const TextStyle(
-                fontSize: 12, fontWeight: FontWeight.bold,
-                color: Colors.white, fontFamily: 'monospace',
-              )),
-              Text(device.id, style: const TextStyle(
-                fontSize: 9, color: Color(0xFF444444), fontFamily: 'monospace',
-              )),
-            ]),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(device.name, style: TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.bold,
+                  color: colors.textPrimary, fontFamily: 'monospace',
+                )),
+                Text(device.id, style: TextStyle(
+                  fontSize: 9, color: colors.textMuted, fontFamily: 'monospace',
+                )),
+              ],
+            ),
           ),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Text(isConnected ? 'CONNECTED' : 'CONNECT',
@@ -357,8 +358,8 @@ class _DeviceTile extends StatelessWidget {
                 letterSpacing: 1, fontFamily: 'monospace',
               )),
             const SizedBox(height: 2),
-            Text('${device.rssi} dBm', style: const TextStyle(
-              fontSize: 9, color: Color(0xFF444444), fontFamily: 'monospace',
+            Text('${device.rssi} dBm', style: TextStyle(
+              fontSize: 9, color: colors.textMuted, fontFamily: 'monospace',
             )),
           ]),
         ]),
@@ -383,6 +384,7 @@ class TransferProgressBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
         Text(label, style: TextStyle(
@@ -399,7 +401,7 @@ class TransferProgressBar extends StatelessWidget {
         Container(
           height: 3,
           decoration: BoxDecoration(
-            color: const Color(0xFF1A1A2E),
+            color: colors.border,
             borderRadius: BorderRadius.circular(2),
           ),
         ),
