@@ -4,6 +4,7 @@ import '../pixel_editor/pixel_canvas_editor.dart';
 import '../spotify/spotify_screen.dart';
 import '../media/media_upload_screen.dart';
 import '../clock/clock_screen.dart';
+import '../font_text/font_text_screen.dart';   // ← new
 import '../../core/ble/ble_providers.dart';
 import '../../core/app_theme.dart';
 import 'connection_status.dart';
@@ -20,7 +21,7 @@ class HomeScreen extends ConsumerWidget {
     return Scaffold(
       body: Column(
         children: [
-          // ── Top bar with theme switcher ──────────────────────────
+          // ── Top bar ──────────────────────────────────────────────
           SafeArea(
             bottom: false,
             child: Container(
@@ -31,7 +32,6 @@ class HomeScreen extends ConsumerWidget {
                 border: Border(bottom: BorderSide(color: colors.border)),
               ),
               child: Row(children: [
-                // Logo mark
                 Container(
                   width: 26, height: 26,
                   decoration: BoxDecoration(
@@ -69,7 +69,6 @@ class HomeScreen extends ConsumerWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Hero logo
                     Container(
                       width: 72, height: 72,
                       decoration: BoxDecoration(
@@ -105,11 +104,9 @@ class HomeScreen extends ConsumerWidget {
                       letterSpacing: 2, fontFamily: 'monospace',
                     )),
 
-                    // ── Theme switcher pill ──────────────────────
                     const SizedBox(height: 28),
                     const ThemeSwitcherPill(),
 
-                    // ── Menu buttons ─────────────────────────────
                     const SizedBox(height: 36),
                     _MenuButton(
                       label: 'PIXEL EDITOR',
@@ -125,6 +122,15 @@ class HomeScreen extends ConsumerWidget {
                       color: colors.accentYellow,
                       colors: colors,
                       onTap: () => _push(context, const MediaUploadScreen()),
+                    ),
+                    const SizedBox(height: 10),
+                    // ── NEW ─────────────────────────────────────────
+                    _MenuButton(
+                      label: 'FONT TEXT',
+                      subtitle: 'Render custom .ttf / .otf to matrix',
+                      color: colors.accentBlue,
+                      colors: colors,
+                      onTap: () => _push(context, const FontTextScreen()),
                     ),
                     const SizedBox(height: 10),
                     _MenuButton(
@@ -156,7 +162,7 @@ class HomeScreen extends ConsumerWidget {
             ),
           ),
 
-          // ── BLE status pinned at bottom ──────────────────────────
+          // ── BLE status ───────────────────────────────────────────
           ConnectionStatusBar(
             manager: bleManager,
             onTap: () => DeviceScannerSheet.show(context, bleManager),
@@ -169,8 +175,6 @@ class HomeScreen extends ConsumerWidget {
   void _push(BuildContext context, Widget screen) =>
       Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
 }
-
-// ── Menu button ───────────────────────────────────────────────────────────────
 
 class _MenuButton extends StatelessWidget {
   final String label;
