@@ -7,6 +7,9 @@ import '../models/device_state.dart';
 
 /// Communicates with the ESP32 over Wi-Fi.
 /// REST for commands, WebSocket for live state updates.
+///
+/// Feature-specific API calls live in device_api_extensions.dart as
+/// extension methods — they use the protected [postJson], [getJson], [baseUrl].
 class DeviceApiService extends ChangeNotifier {
   String? _baseUrl;
   WebSocketChannel? _wsChannel;
@@ -16,7 +19,10 @@ class DeviceApiService extends ChangeNotifier {
 
   DeviceState get deviceState => _deviceState;
 
-  // ── Connection ────────────────────────────────────────────────────────────
+  /// Exposed for extension methods in device_api_extensions.dart
+  String? get baseUrl => _baseUrl;
+
+  // ── Connection ─────────────────────────────────────────────────────────
 
   Future<bool> connect(String ip) async {
     _baseUrl = 'http://$ip';
@@ -26,7 +32,6 @@ class DeviceApiService extends ChangeNotifier {
     ));
 
     try {
-      // Ping the device
       final res = await http
           .get(Uri.parse('$_baseUrl/api/info'))
           .timeout(const Duration(seconds: 5));
@@ -62,36 +67,30 @@ class DeviceApiService extends ChangeNotifier {
     _updateState(const DeviceState());
   }
 
-  // ── Mode switching ────────────────────────────────────────────────────────
+  // ── Core commands ──────────────────────────────────────────────────────
 
   Future<void> setMode(AppMode mode) async {
-    await _post('/api/mode', {'mode': mode.name});
+    await postJson('/api/mode', {'mode': mode.name});
     _updateState(_deviceState.copyWith(activeMode: mode));
   }
 
-  // ── Brightness ────────────────────────────────────────────────────────────
-
   Future<void> setBrightness(int value) async {
-    await _post('/api/brightness', {'value': value});
+    await postJson('/api/brightness', {'value': value});
   }
 
-  // ── Clock ─────────────────────────────────────────────────────────────────
-
   Future<void> setClockFormat(bool is24h) async {
-    await _post('/api/clock/config', {'format24h': is24h});
+    await postJson('/api/clock/config', {'format24h': is24h});
   }
 
   Future<void> setClockTimezone(String tz) async {
-    await _post('/api/clock/config', {'timezone': tz});
+    await postJson('/api/clock/config', {'timezone': tz});
   }
-
-  // ── Spotify ───────────────────────────────────────────────────────────────
 
   Future<void> pushSpotifyState({
     required String trackName,
     required String artistName,
     required bool isPlaying,
-    Uint8List? albumArtJpeg, // 32x64 pixels, sent as base64
+    Uint8List? albumArtJpeg,
   }) async {
     final body = <String, dynamic>{
       'track': trackName,
@@ -101,58 +100,22 @@ class DeviceApiService extends ChangeNotifier {
     if (albumArtJpeg != null) {
       body['art'] = base64Encode(albumArtJpeg);
     }
-    await _post('/api/spotify/state', body);
+    await postJson('/api/spotify/state', body);
   }
 
   Future<void> spotifyCommand(String cmd) async {
-    // cmd: 'play' | 'pause' | 'next' | 'prev'
-    await _post('/api/spotify/cmd', {'cmd': cmd});
+    await postJson('/api/spotify/cmd', {'cmd': cmd});
   }
-
-  // ── Pomodoro ──────────────────────────────────────────────────────────────
 
   Future<void> pomodoroCommand(String cmd) async {
-    // cmd: 'start' | 'pause' | 'reset'
-    await _post('/api/pomodoro/cmd', {'cmd': cmd});
-  }
-
-  Future<void> setPomodoroConfig({
-    required int workMinutes,
-    required int breakMinutes,
-  }) async {
-    await _post('/api/pomodoro/config', {
-      'work': workMinutes,
-      'break': breakMinutes,
-    });
-  }
-
-  // ── GIF ───────────────────────────────────────────────────────────────────
-
-  Future<void> uploadGif(Uint8List bytes, String filename) async {
-    if (_baseUrl == null) return;
-    final request = http.MultipartRequest(
-      'POST',
-      Uri.parse('$_baseUrl/api/gif/upload'),
-    );
-    request.files.add(http.MultipartFile.fromBytes(
-      'file',
-      bytes,
-      filename: filename,
-    ));
-    await request.send();
-  }
-
-  Future<List<String>> listGifs() async {
-    final res = await _get('/api/gif/list');
-    if (res == null) return [];
-    return (res['files'] as List).cast<String>();
+    await postJson('/api/pomodoro/cmd', {'cmd': cmd});
   }
 
   Future<void> selectGif(String filename) async {
-    await _post('/api/gif/select', {'file': filename});
+    await postJson('/api/gif/select', {'file': filename});
   }
 
-  // ── WebSocket ─────────────────────────────────────────────────────────────
+  // ── WebSocket ──────────────────────────────────────────────────────────
 
   void _connectWebSocket(String ip) {
     _wsChannel = WebSocketChannel.connect(Uri.parse('ws://$ip/ws'));
@@ -183,7 +146,7 @@ class DeviceApiService extends ChangeNotifier {
     }
   }
 
-  // ── Ping ──────────────────────────────────────────────────────────────────
+  // ── Ping ───────────────────────────────────────────────────────────────
 
   void _startPingTimer() {
     _pingTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
@@ -199,9 +162,9 @@ class DeviceApiService extends ChangeNotifier {
     });
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  // ── HTTP helpers (also used by extension methods) ──────────────────────
 
-  Future<Map<String, dynamic>?> _get(String path) async {
+  Future<Map<String, dynamic>?> getJson(String path) async {
     if (_baseUrl == null) return null;
     try {
       final res = await http
@@ -216,27 +179,27 @@ class DeviceApiService extends ChangeNotifier {
     return null;
   }
 
-  Future<void> _post(String path, Map<String, dynamic> body) async {
-    if (_baseUrl == null) return;
+  Future<bool> postJson(String path, Map<String, dynamic> body) async {
+    if (_baseUrl == null) return false;
     try {
-      await http
+      final res = await http
           .post(
             Uri.parse('$_baseUrl$path'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(body),
           )
           .timeout(const Duration(seconds: 5));
+      return res.statusCode == 200;
     } catch (e) {
       debugPrint('POST $path error: $e');
+      return false;
     }
   }
 
-  AppMode _parseModeFromString(String s) {
-    return AppMode.values.firstWhere(
-      (m) => m.name == s,
-      orElse: () => AppMode.clock,
-    );
-  }
+  AppMode _parseModeFromString(String s) => AppMode.values.firstWhere(
+        (m) => m.name == s,
+        orElse: () => AppMode.clock,
+      );
 
   void _updateState(DeviceState newState) {
     _deviceState = newState;

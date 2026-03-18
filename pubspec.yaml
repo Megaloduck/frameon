@@ -16,12 +16,15 @@ dependencies:
   google_fonts: ^8.0.2
   gap: ^3.0.1
 
-
   # HTTP client (ESP32 REST API + Spotify API)
   http: ^1.6.0
 
   # WebSocket (live state updates from ESP32)
   web_socket_channel: ^3.0.3
+
+  # Web platform JS interop — required by web_serial_service.dart
+  # dart:js_interop and package:web/web.dart both need this as a direct dep
+  web: ^1.1.1
 
   # Secure token storage (Spotify OAuth tokens)
   flutter_secure_storage: ^10.0.0
@@ -47,10 +50,8 @@ dependencies:
   # File picking (GIF/image upload from device)
   file_picker: ^10.3.10
 
-  # Shared preferences (device settings, brightness, mode)
+  # Persistent settings (brightness, last IP, mode)
   shared_preferences: ^2.3.5
-
-
 
 dev_dependencies:
   flutter_test:
