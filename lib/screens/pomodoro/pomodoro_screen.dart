@@ -75,11 +75,6 @@ class PomodoroState {
         isRunning: isRunning ?? this.isRunning,
       );
 
-  double get progress {
-    // Calculated on timer side — just expose seconds here
-    return secondsRemaining.toDouble();
-  }
-
   String get timeLabel {
     final m = (secondsRemaining ~/ 60).toString().padLeft(2, '0');
     final s = (secondsRemaining % 60).toString().padLeft(2, '0');
@@ -121,13 +116,19 @@ final pomodoroConfigProvider =
     NotifierProvider<PomodoroConfigNotifier, PomodoroConfig>(
         PomodoroConfigNotifier.new);
 
-// ── Timer notifier (local countdown — mirrors what ESP32 runs) ────────────
+// ── Timer notifier ────────────────────────────────────────────────────────
+// FIX: Notifier<T> in Riverpod 3.x has no dispose() method.
+// Use ref.onDispose() inside build() to cancel the timer on provider disposal.
 
 class PomodoroTimerNotifier extends Notifier<PomodoroState> {
   Timer? _ticker;
 
   @override
-  PomodoroState build() => const PomodoroState();
+  PomodoroState build() {
+    // Cancel the ticker when this notifier is disposed (provider scope removed)
+    ref.onDispose(() => _ticker?.cancel());
+    return const PomodoroState();
+  }
 
   void start(PomodoroConfig config) {
     if (state.isRunning) return;
@@ -193,12 +194,6 @@ class PomodoroTimerNotifier extends Notifier<PomodoroState> {
       PomodoroPhase.longBreak => config.longBreakMinutes * 60,
     };
   }
-
-  @override
-  void dispose() {
-    _ticker?.cancel();
-    super.dispose();
-  }
 }
 
 final pomodoroTimerProvider =
@@ -238,8 +233,7 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
     final totalSecs = ref
         .read(pomodoroTimerProvider.notifier)
         .totalSeconds(timer.phase, config);
-    final progress =
-        totalSecs > 0 ? timer.secondsRemaining / totalSecs : 0.0;
+    final progress = totalSecs > 0 ? timer.secondsRemaining / totalSecs : 0.0;
 
     return Scaffold(
       appBar: AppBar(
@@ -255,15 +249,8 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
             constraints: const BoxConstraints(maxWidth: 520),
             child: Column(
               children: [
-                // ── Timer ring ────────────────────────────────────────────
-                _TimerRing(
-                  progress: progress,
-                  timer: timer,
-                  config: config,
-                ),
+                _TimerRing(progress: progress, timer: timer, config: config),
                 const Gap(32),
-
-                // ── Controls ──────────────────────────────────────────────
                 _TimerControls(
                   timer: timer,
                   config: config,
@@ -287,15 +274,11 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                   },
                 ),
                 const Gap(32),
-
-                // ── Session dots ──────────────────────────────────────────
                 _SessionDots(
                   completed: timer.sessionsCompleted,
                   total: config.sessionsBeforeLong,
                 ),
                 const Gap(32),
-
-                // ── Config ────────────────────────────────────────────────
                 _PomodoroConfig(
                   config: config,
                   onUpdate: (c) async {
@@ -304,8 +287,6 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                   },
                 ),
                 const Gap(24),
-
-                // ── Sync to device ────────────────────────────────────────
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
@@ -322,8 +303,7 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                             child: CircularProgressIndicator(
                                 strokeWidth: 2, color: AppColors.bg))
                         : const Icon(Icons.sync, size: 18),
-                    label:
-                        Text(_isSyncing ? 'Syncing…' : 'Sync config to matrix'),
+                    label: Text(_isSyncing ? 'Syncing…' : 'Sync config to matrix'),
                   ),
                 ),
                 if (!isConnected)
@@ -331,8 +311,7 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                     padding: EdgeInsets.only(top: 8),
                     child: Text(
                       'Connect to ESP32 in Setup to sync timer',
-                      style: TextStyle(
-                          fontSize: 12, color: AppColors.textMuted),
+                      style: TextStyle(fontSize: 12, color: AppColors.textMuted),
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -366,9 +345,7 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
     });
     try {
       await ref.read(deviceApiServiceProvider).sendPomodoroConfig(config);
-      await ref
-          .read(deviceApiServiceProvider)
-          .setMode(AppMode.pomodoro);
+      await ref.read(deviceApiServiceProvider).setMode(AppMode.pomodoro);
       setState(() => _syncResult = '✓ Pomodoro config synced to matrix');
     } catch (e) {
       setState(() => _syncResult = '✗ Sync failed: $e');
@@ -411,7 +388,6 @@ class _TimerRing extends StatelessWidget {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Background ring
           SizedBox(
             width: 220,
             height: 220,
@@ -423,7 +399,6 @@ class _TimerRing extends StatelessWidget {
               ),
             ),
           ),
-          // Center content
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -450,8 +425,7 @@ class _TimerRing extends StatelessWidget {
               const Gap(8),
               if (timer.isRunning)
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                   decoration: BoxDecoration(
                     color: phaseColor.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
@@ -470,10 +444,7 @@ class _TimerRing extends StatelessWidget {
               else
                 Text(
                   'Session ${timer.sessionsCompleted + 1}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textMuted,
-                  ),
+                  style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
                 ),
             ],
           ),
@@ -484,7 +455,7 @@ class _TimerRing extends StatelessWidget {
 }
 
 class _RingPainter extends CustomPainter {
-  final double progress; // 0.0–1.0
+  final double progress;
   final Color color;
   final Color trackColor;
 
@@ -501,7 +472,6 @@ class _RingPainter extends CustomPainter {
     final r = (size.width / 2) - 12;
     const strokeWidth = 8.0;
 
-    // Track
     canvas.drawArc(
       Rect.fromCircle(center: Offset(cx, cy), radius: r),
       0,
@@ -513,7 +483,6 @@ class _RingPainter extends CustomPainter {
         ..color = trackColor,
     );
 
-    // Progress arc
     if (progress > 0) {
       canvas.drawArc(
         Rect.fromCircle(center: Offset(cx, cy), radius: r),
@@ -554,7 +523,6 @@ class _TimerControls extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Reset
           _ControlBtn(
             icon: Icons.replay,
             color: AppColors.textSecondary,
@@ -562,7 +530,6 @@ class _TimerControls extends StatelessWidget {
             tooltip: 'Reset',
           ),
           const Gap(16),
-          // Play / Pause
           GestureDetector(
             onTap: timer.isRunning ? onPause : onStart,
             child: Container(
@@ -587,11 +554,10 @@ class _TimerControls extends StatelessWidget {
             ),
           ),
           const Gap(16),
-          // Skip to next phase
           _ControlBtn(
             icon: Icons.skip_next,
             color: AppColors.textSecondary,
-            onTap: () {}, // triggers phase advance
+            onTap: () {},
             tooltip: 'Skip phase',
           ),
         ],
@@ -724,8 +690,7 @@ class _PomodoroConfig extends StatelessWidget {
                   min: 1,
                   max: 30,
                   color: AppColors.connected,
-                  onChanged: (v) =>
-                      onUpdate(config.copyWith(shortBreakMinutes: v)),
+                  onChanged: (v) => onUpdate(config.copyWith(shortBreakMinutes: v)),
                 ),
                 const Divider(height: 1, indent: 16, endIndent: 16, color: AppColors.border),
                 _DurationRow(
@@ -735,8 +700,7 @@ class _PomodoroConfig extends StatelessWidget {
                   min: 5,
                   max: 60,
                   color: AppColors.clock,
-                  onChanged: (v) =>
-                      onUpdate(config.copyWith(longBreakMinutes: v)),
+                  onChanged: (v) => onUpdate(config.copyWith(longBreakMinutes: v)),
                 ),
                 const Divider(height: 1, indent: 16, endIndent: 16, color: AppColors.border),
                 _DurationRow(
@@ -747,28 +711,23 @@ class _PomodoroConfig extends StatelessWidget {
                   max: 8,
                   color: AppColors.pomodoro,
                   unit: '',
-                  onChanged: (v) =>
-                      onUpdate(config.copyWith(sessionsBeforeLong: v)),
+                  onChanged: (v) => onUpdate(config.copyWith(sessionsBeforeLong: v)),
                 ),
                 const Divider(height: 1, indent: 16, endIndent: 16, color: AppColors.border),
                 Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   child: Row(
                     children: [
                       const Icon(Icons.notifications_outlined,
                           size: 18, color: AppColors.pomodoro),
                       const Gap(12),
                       const Text('Alert on completion',
-                          style: TextStyle(
-                              fontSize: 14,
-                              color: AppColors.textPrimary)),
+                          style: TextStyle(fontSize: 14, color: AppColors.textPrimary)),
                       const Spacer(),
                       Switch(
                         value: config.alertOnComplete,
                         activeColor: AppColors.pomodoro,
-                        onChanged: (v) =>
-                            onUpdate(config.copyWith(alertOnComplete: v)),
+                        onChanged: (v) => onUpdate(config.copyWith(alertOnComplete: v)),
                       ),
                     ],
                   ),
@@ -810,10 +769,8 @@ class _DurationRow extends StatelessWidget {
             const Gap(12),
             Expanded(
               child: Text(label,
-                  style: const TextStyle(
-                      fontSize: 13, color: AppColors.textPrimary)),
+                  style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
             ),
-            // Stepper
             InkWell(
               onTap: value > min ? () => onChanged(value - 1) : null,
               borderRadius: BorderRadius.circular(6),
@@ -827,9 +784,7 @@ class _DurationRow extends StatelessWidget {
                 ),
                 child: Icon(Icons.remove,
                     size: 14,
-                    color: value > min
-                        ? AppColors.textSecondary
-                        : AppColors.textMuted),
+                    color: value > min ? AppColors.textSecondary : AppColors.textMuted),
               ),
             ),
             SizedBox(
@@ -858,9 +813,7 @@ class _DurationRow extends StatelessWidget {
                 ),
                 child: Icon(Icons.add,
                     size: 14,
-                    color: value < max
-                        ? AppColors.textSecondary
-                        : AppColors.textMuted),
+                    color: value < max ? AppColors.textSecondary : AppColors.textMuted),
               ),
             ),
           ],

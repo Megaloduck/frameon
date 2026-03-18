@@ -2,30 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
-  // Base
   static const bg = Color(0xFF0A0C0F);
   static const surface = Color(0xFF12161C);
   static const surfaceElevated = Color(0xFF1A1F28);
   static const border = Color(0xFF252B36);
   static const borderBright = Color(0xFF323A48);
-
-  // Accent — matrix green
   static const accent = Color(0xFF00E5A0);
   static const accentDim = Color(0xFF00A372);
   static const accentGlow = Color(0x2200E5A0);
-
-  // Feature colors
   static const spotify = Color(0xFF1DB954);
   static const clock = Color(0xFF4A9EFF);
   static const gif = Color(0xFFFF6B6B);
   static const pomodoro = Color(0xFFFFB347);
-
-  // Text
   static const textPrimary = Color(0xFFEAEDF2);
   static const textSecondary = Color(0xFF7A8499);
   static const textMuted = Color(0xFF3D4557);
-
-  // Status
   static const connected = Color(0xFF00E5A0);
   static const disconnected = Color(0xFFFF4A4A);
   static const connecting = Color(0xFFFFB347);
@@ -112,7 +103,8 @@ class AppTheme {
         thickness: 1,
         space: 1,
       ),
-      cardTheme: CardTheme(
+      // FIX: Flutter 3.29+ requires CardThemeData (not CardTheme) here
+      cardTheme: CardThemeData(
         color: AppColors.surfaceElevated,
         elevation: 0,
         shape: RoundedRectangleBorder(

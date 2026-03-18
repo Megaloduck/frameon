@@ -1,106 +1,187 @@
-import 'dart:convert';
+import 'dart:async';
+import 'dart:js_interop';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-import '../screens/clock/clock_screen.dart';
-import '../screens/pomodoro/pomodoro_screen.dart';
-import 'device_api_service.dart';
 
-/// Extends DeviceApiService with feature-specific API calls.
-/// Import this file alongside device_api_service.dart to get the full API.
-extension ClockApi on DeviceApiService {
-  Future<void> sendClockConfig(ClockConfig config) async {
-    await postJson('/api/clock/config', {
-      'format24h': config.is24h,
-      'showDate': config.showDate,
-      'showSeconds': config.showSeconds,
-      'timezone': config.timezone,
-      'ntp': config.ntpServer,
-      'brightness': config.brightness,
-    });
-  }
+// ── JS interop bindings to window.serialBridge ───────────────────────────
+// Matches the API exposed by web/serial_interops.js
+
+@JS('serialBridge.isAvailable')
+external bool _jsIsAvailable();
+
+@JS('serialBridge.requestPort')
+external JSPromise<JSBoolean> _jsRequestPort();
+
+@JS('serialBridge.openPort')
+external JSPromise<JSAny?> _jsOpenPort(int baudRate);
+
+@JS('serialBridge.write')
+external JSPromise<JSAny?> _jsWrite(JSString data);
+
+@JS('serialBridge.close')
+external JSPromise<JSAny?> _jsClose();
+
+@JS('serialBridge.addLineListener')
+external void _jsAddLineListener(JSFunction callback);
+
+@JS('serialBridge.removeLineListener')
+external void _jsRemoveLineListener(JSFunction callback);
+
+// ── Enums & value types ───────────────────────────────────────────────────
+
+enum WebSerialStatus {
+  unavailable,
+  idle,
+  requestingPort,
+  connecting,
+  connected,
+  error,
 }
 
-extension PomodoroApi on DeviceApiService {
-  Future<void> sendPomodoroConfig(PomodoroConfig config) async {
-    await postJson('/api/pomodoro/config', {
-      'work': config.workMinutes,
-      'shortBreak': config.shortBreakMinutes,
-      'longBreak': config.longBreakMinutes,
-      'sessions': config.sessionsBeforeLong,
-      'brightness': config.brightness,
-      'alertOnComplete': config.alertOnComplete,
-    });
-  }
+class WebSerialMessage {
+  final String text;
+  final bool isOutgoing;
+  final DateTime timestamp;
+
+  const WebSerialMessage({
+    required this.text,
+    required this.isOutgoing,
+    required this.timestamp,
+  });
 }
 
-extension GifApi on DeviceApiService {
-  Future<List<GifEntry>> fetchGifList() async {
-    final res = await getJson('/api/gif/list');
-    if (res == null) return [];
-    final files = res['files'] as List? ?? [];
-    return files.map((f) => GifEntry.fromJson(f as Map<String, dynamic>)).toList();
-  }
+// ── Service ───────────────────────────────────────────────────────────────
 
-  Future<bool> uploadGifFile(Uint8List bytes, String filename) async {
-    final url = baseUrl;
-    if (url == null) return false;
-    try {
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse('$url/api/gif/upload'),
-      );
-      request.files.add(http.MultipartFile.fromBytes(
-        'file',
-        bytes,
-        filename: filename,
-      ));
-      final response = await request.send().timeout(const Duration(seconds: 30));
-      return response.statusCode == 200;
-    } catch (e) {
-      debugPrint('uploadGifFile error: $e');
-      return false;
-    }
-  }
+/// Abstracts Web Serial communication for ESP32 Wi-Fi provisioning.
+/// On web: uses window.serialBridge (backed by Web Serial API in serial_interops.js).
+/// On desktop/non-web: [isAvailable] returns false — user enters IP manually.
+class WebSerialService extends ChangeNotifier {
+  WebSerialStatus _status = WebSerialStatus.idle;
+  final List<WebSerialMessage> _log = [];
+  StreamController<String>? _lineController;
+  Stream<String>? _lines;
+  JSFunction? _jsListenerRef;
 
-  Future<bool> deleteGif(String filename) async {
+  WebSerialStatus get status => _status;
+  List<WebSerialMessage> get log => List.unmodifiable(_log);
+
+  bool get isAvailable {
+    if (!kIsWeb) return false;
     try {
-      final url = baseUrl;
-      if (url == null) return false;
-      final res = await http
-          .delete(Uri.parse('$url/api/gif/delete'),
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({'file': filename}))
-          .timeout(const Duration(seconds: 5));
-      return res.statusCode == 200;
+      return _jsIsAvailable();
     } catch (_) {
       return false;
     }
   }
-}
 
-// GIF entry model (used in extension above)
-class GifEntry {
-  final String filename;
-  final int sizeBytes;
-  final bool isPlaying;
+  Future<bool> requestPort() async {
+    if (!isAvailable) {
+      _status = WebSerialStatus.unavailable;
+      notifyListeners();
+      return false;
+    }
+    _status = WebSerialStatus.requestingPort;
+    notifyListeners();
+    try {
+      final granted = (await _jsRequestPort().toDart).toDart;
+      if (!granted) {
+        _status = WebSerialStatus.idle;
+        notifyListeners();
+        return false;
+      }
+      _status = WebSerialStatus.connecting;
+      notifyListeners();
+      await _openPort();
+      return true;
+    } catch (e) {
+      _status = WebSerialStatus.error;
+      _addLog('Error opening port: $e', isOutgoing: false);
+      notifyListeners();
+      return false;
+    }
+  }
 
-  const GifEntry({
-    required this.filename,
-    required this.sizeBytes,
-    required this.isPlaying,
-  });
+  Future<void> sendWifiCredentials(String ssid, String password) async {
+    final payload = '{"cmd":"wifi","ssid":"$ssid","password":"$password"}\n';
+    await _send(payload);
+    _addLog('→ Sent Wi-Fi credentials (SSID: $ssid)', isOutgoing: true);
+  }
 
-  factory GifEntry.fromJson(Map<String, dynamic> j) => GifEntry(
-        filename: j['name'] as String? ?? '',
-        sizeBytes: j['size'] as int? ?? 0,
-        isPlaying: j['playing'] as bool? ?? false,
-      );
+  Future<String?> requestDeviceIp() async {
+    await _send('{"cmd":"get_ip"}\n');
+    _addLog('→ Requested device IP', isOutgoing: true);
+    try {
+      final response = await _lines!
+          .firstWhere((l) => l.startsWith('IP:'))
+          .timeout(const Duration(seconds: 20));
+      final ip = response.replaceFirst('IP:', '').trim();
+      _addLog('← Device IP: $ip', isOutgoing: false);
+      return ip;
+    } catch (_) {
+      _addLog('✗ Timed out waiting for IP response', isOutgoing: false);
+      return null;
+    }
+  }
 
-  String get displayName => filename.replaceAll(RegExp(r'\.gif$', caseSensitive: false), '');
+  Future<void> disconnect() async {
+    _removeJsListener();
+    _lineController?.close();
+    _lineController = null;
+    _lines = null;
+    if (kIsWeb) {
+      try {
+        await _jsClose().toDart;
+      } catch (_) {}
+    }
+    _status = WebSerialStatus.idle;
+    notifyListeners();
+  }
 
-  String get sizeLabel {
-    if (sizeBytes < 1024) return '${sizeBytes}B';
-    if (sizeBytes < 1024 * 1024) return '${(sizeBytes / 1024).toStringAsFixed(1)}KB';
-    return '${(sizeBytes / (1024 * 1024)).toStringAsFixed(1)}MB';
+  Future<void> _openPort() async {
+    await _jsOpenPort(115200).toDart;
+    _lineController = StreamController<String>.broadcast();
+    _lines = _lineController!.stream;
+    _jsListenerRef = ((JSString jsLine) {
+      final line = jsLine.toDart;
+      if (!(_lineController?.isClosed ?? true)) {
+        _addLog(line, isOutgoing: false);
+        _lineController?.add(line);
+      }
+    }).toJS;
+    _jsAddLineListener(_jsListenerRef!);
+    _status = WebSerialStatus.connected;
+    _addLog('Port opened at 115200 baud', isOutgoing: false);
+    notifyListeners();
+  }
+
+  Future<void> _send(String data) async {
+    if (_status != WebSerialStatus.connected) {
+      throw StateError('Serial port not open');
+    }
+    await _jsWrite(data.toJS).toDart;
+  }
+
+  void _removeJsListener() {
+    if (_jsListenerRef != null) {
+      try {
+        _jsRemoveLineListener(_jsListenerRef!);
+      } catch (_) {}
+      _jsListenerRef = null;
+    }
+  }
+
+  void _addLog(String text, {required bool isOutgoing}) {
+    _log.add(WebSerialMessage(
+      text: text,
+      isOutgoing: isOutgoing,
+      timestamp: DateTime.now(),
+    ));
+    if (_log.length > 300) _log.removeAt(0);
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    disconnect();
+    super.dispose();
   }
 }

@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../models/device_state.dart';
 import '../../services/providers.dart';
+import '../../services/device_api_extensions.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/connection_badge.dart';
 
@@ -286,11 +288,7 @@ class _ClockScreenState extends ConsumerState<ClockScreen> {
     });
     final api = ref.read(deviceApiServiceProvider);
     try {
-      await api.setMode(const dynamic is dynamic ? null : null); // set clock mode
-      await api.setClockFormat(config.is24h);
-      await api.setClockTimezone(config.timezone);
-      await api.setBrightness(config.brightness);
-      // Send full clock config as single call
+      await api.setMode(AppMode.clock);
       await api.sendClockConfig(config);
       setState(() => _sendResult = '✓ Clock config applied');
     } catch (e) {
