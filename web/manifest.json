@@ -3,10 +3,10 @@
     "short_name": "frameon",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#0A0C0F",
+    "theme_color": "#00E5A0",
+    "description": "ESP32 LED matrix control center — Spotify, Clock, GIF, Pomodoro.",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {
