@@ -18,7 +18,7 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="Frameon — ESP32 LED Panel Control Center">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -32,15 +32,52 @@
   <title>frameon</title>
   <link rel="manifest" href="manifest.json">
 </head>
+<style>
+body {
+      background-color: #0A0C0F;
+      margin: 0;
+      padding: 0;
+    }
+    #loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      flex-direction: column;
+      gap: 16px;
+      color: #00E5A0;
+      font-family: monospace;
+      font-size: 13px;
+    }
+    #loading .dot-ring {
+      width: 32px;
+      height: 32px;
+      border: 2px solid #00E5A020;
+      border-top-color: #00E5A0;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
+  <div id="loading">
+    <div class="dot-ring"></div>
+    <span>almost there</span>
+  </div>
 
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
+  <!-- Load Web Serial bridge BEFORE Flutter boots -->
+  <script src="serial_interop.js"></script>
+
+  <script>
+    window.addEventListener('flutter-first-frame', () => {
+      const el = document.getElementById('loading');
+      if (el) el.style.display = 'none';
+    });
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
+</html>
+
 </html>
