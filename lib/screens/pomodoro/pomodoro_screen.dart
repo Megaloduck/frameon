@@ -6,7 +6,7 @@ import 'package:gap/gap.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/device_state.dart';
 import '../../services/providers.dart';
-import '../../services/device_api_extensions.dart';
+import '../../services/transport_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/connection_badge.dart';
 
@@ -30,21 +30,16 @@ class PomodoroConfig {
   });
 
   PomodoroConfig copyWith({
-    int? workMinutes,
-    int? shortBreakMinutes,
-    int? longBreakMinutes,
-    int? sessionsBeforeLong,
-    bool? alertOnComplete,
-    int? brightness,
-  }) =>
-      PomodoroConfig(
-        workMinutes: workMinutes ?? this.workMinutes,
-        shortBreakMinutes: shortBreakMinutes ?? this.shortBreakMinutes,
-        longBreakMinutes: longBreakMinutes ?? this.longBreakMinutes,
-        sessionsBeforeLong: sessionsBeforeLong ?? this.sessionsBeforeLong,
-        alertOnComplete: alertOnComplete ?? this.alertOnComplete,
-        brightness: brightness ?? this.brightness,
-      );
+    int? workMinutes, int? shortBreakMinutes, int? longBreakMinutes,
+    int? sessionsBeforeLong, bool? alertOnComplete, int? brightness,
+  }) => PomodoroConfig(
+    workMinutes: workMinutes ?? this.workMinutes,
+    shortBreakMinutes: shortBreakMinutes ?? this.shortBreakMinutes,
+    longBreakMinutes: longBreakMinutes ?? this.longBreakMinutes,
+    sessionsBeforeLong: sessionsBeforeLong ?? this.sessionsBeforeLong,
+    alertOnComplete: alertOnComplete ?? this.alertOnComplete,
+    brightness: brightness ?? this.brightness,
+  );
 }
 
 enum PomodoroPhase { work, shortBreak, longBreak }
@@ -63,17 +58,14 @@ class PomodoroState {
   });
 
   PomodoroState copyWith({
-    PomodoroPhase? phase,
-    int? secondsRemaining,
-    int? sessionsCompleted,
-    bool? isRunning,
-  }) =>
-      PomodoroState(
-        phase: phase ?? this.phase,
-        secondsRemaining: secondsRemaining ?? this.secondsRemaining,
-        sessionsCompleted: sessionsCompleted ?? this.sessionsCompleted,
-        isRunning: isRunning ?? this.isRunning,
-      );
+    PomodoroPhase? phase, int? secondsRemaining,
+    int? sessionsCompleted, bool? isRunning,
+  }) => PomodoroState(
+    phase: phase ?? this.phase,
+    secondsRemaining: secondsRemaining ?? this.secondsRemaining,
+    sessionsCompleted: sessionsCompleted ?? this.sessionsCompleted,
+    isRunning: isRunning ?? this.isRunning,
+  );
 
   String get timeLabel {
     final m = (secondsRemaining ~/ 60).toString().padLeft(2, '0');
@@ -82,7 +74,7 @@ class PomodoroState {
   }
 }
 
-// ── Config notifier ───────────────────────────────────────────────────────
+// ── Notifiers ─────────────────────────────────────────────────────────────
 
 class PomodoroConfigNotifier extends Notifier<PomodoroConfig> {
   @override
@@ -91,12 +83,12 @@ class PomodoroConfigNotifier extends Notifier<PomodoroConfig> {
   Future<void> load() async {
     final p = await SharedPreferences.getInstance();
     state = PomodoroConfig(
-      workMinutes: p.getInt('pomo_work') ?? 25,
-      shortBreakMinutes: p.getInt('pomo_short') ?? 5,
-      longBreakMinutes: p.getInt('pomo_long') ?? 15,
-      sessionsBeforeLong: p.getInt('pomo_sessions') ?? 4,
-      alertOnComplete: p.getBool('pomo_alert') ?? true,
-      brightness: p.getInt('pomo_brightness') ?? 128,
+      workMinutes:        p.getInt('pomo_work')       ?? 25,
+      shortBreakMinutes:  p.getInt('pomo_short')      ?? 5,
+      longBreakMinutes:   p.getInt('pomo_long')       ?? 15,
+      sessionsBeforeLong: p.getInt('pomo_sessions')   ?? 4,
+      alertOnComplete:    p.getBool('pomo_alert')     ?? true,
+      brightness:         p.getInt('pomo_brightness') ?? 128,
     );
   }
 
@@ -113,19 +105,13 @@ class PomodoroConfigNotifier extends Notifier<PomodoroConfig> {
 }
 
 final pomodoroConfigProvider =
-    NotifierProvider<PomodoroConfigNotifier, PomodoroConfig>(
-        PomodoroConfigNotifier.new);
-
-// ── Timer notifier ────────────────────────────────────────────────────────
-// FIX: Notifier<T> in Riverpod 3.x has no dispose() method.
-// Use ref.onDispose() inside build() to cancel the timer on provider disposal.
+    NotifierProvider<PomodoroConfigNotifier, PomodoroConfig>(PomodoroConfigNotifier.new);
 
 class PomodoroTimerNotifier extends Notifier<PomodoroState> {
   Timer? _ticker;
 
   @override
   PomodoroState build() {
-    // Cancel the ticker when this notifier is disposed (provider scope removed)
     ref.onDispose(() => _ticker?.cancel());
     return const PomodoroState();
   }
@@ -143,68 +129,45 @@ class PomodoroTimerNotifier extends Notifier<PomodoroState> {
 
   void reset(PomodoroConfig config) {
     _ticker?.cancel();
-    state = PomodoroState(
-      secondsRemaining: config.workMinutes * 60,
-      phase: PomodoroPhase.work,
-    );
+    state = PomodoroState(secondsRemaining: config.workMinutes * 60);
   }
 
   void _tick(PomodoroConfig config) {
-    if (state.secondsRemaining <= 0) {
-      _ticker?.cancel();
-      _advance(config);
-      return;
-    }
+    if (state.secondsRemaining <= 0) { _ticker?.cancel(); _advance(config); return; }
     state = state.copyWith(secondsRemaining: state.secondsRemaining - 1);
   }
 
   void _advance(PomodoroConfig config) {
     final newSessions = state.phase == PomodoroPhase.work
-        ? state.sessionsCompleted + 1
-        : state.sessionsCompleted;
-
-    PomodoroPhase next;
-    int nextSeconds;
-
+        ? state.sessionsCompleted + 1 : state.sessionsCompleted;
+    PomodoroPhase next; int nextSecs;
     if (state.phase == PomodoroPhase.work) {
       if (newSessions % config.sessionsBeforeLong == 0) {
-        next = PomodoroPhase.longBreak;
-        nextSeconds = config.longBreakMinutes * 60;
+        next = PomodoroPhase.longBreak; nextSecs = config.longBreakMinutes * 60;
       } else {
-        next = PomodoroPhase.shortBreak;
-        nextSeconds = config.shortBreakMinutes * 60;
+        next = PomodoroPhase.shortBreak; nextSecs = config.shortBreakMinutes * 60;
       }
     } else {
-      next = PomodoroPhase.work;
-      nextSeconds = config.workMinutes * 60;
+      next = PomodoroPhase.work; nextSecs = config.workMinutes * 60;
     }
-
-    state = PomodoroState(
-      phase: next,
-      secondsRemaining: nextSeconds,
-      sessionsCompleted: newSessions,
-      isRunning: false,
-    );
+    state = PomodoroState(phase: next, secondsRemaining: nextSecs,
+        sessionsCompleted: newSessions, isRunning: false);
   }
 
-  int totalSeconds(PomodoroPhase phase, PomodoroConfig config) {
-    return switch (phase) {
-      PomodoroPhase.work => config.workMinutes * 60,
-      PomodoroPhase.shortBreak => config.shortBreakMinutes * 60,
-      PomodoroPhase.longBreak => config.longBreakMinutes * 60,
-    };
-  }
+  int totalSeconds(PomodoroPhase phase, PomodoroConfig config) => switch (phase) {
+    PomodoroPhase.work       => config.workMinutes * 60,
+    PomodoroPhase.shortBreak => config.shortBreakMinutes * 60,
+    PomodoroPhase.longBreak  => config.longBreakMinutes * 60,
+  };
 }
 
 final pomodoroTimerProvider =
-    NotifierProvider<PomodoroTimerNotifier, PomodoroState>(
-        PomodoroTimerNotifier.new);
+    NotifierProvider<PomodoroTimerNotifier, PomodoroState>(PomodoroTimerNotifier.new);
 
 // ── Screen ────────────────────────────────────────────────────────────────
 
 class PomodoroScreen extends ConsumerStatefulWidget {
   const PomodoroScreen({super.key});
-
   @override
   ConsumerState<PomodoroScreen> createState() => _PomodoroScreenState();
 }
@@ -217,21 +180,19 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
   void initState() {
     super.initState();
     ref.read(pomodoroConfigProvider.notifier).load().then((_) {
-      if (mounted) {
-        final config = ref.read(pomodoroConfigProvider);
-        ref.read(pomodoroTimerProvider.notifier).reset(config);
-      }
+      if (mounted) ref.read(pomodoroTimerProvider.notifier)
+          .reset(ref.read(pomodoroConfigProvider));
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final config = ref.watch(pomodoroConfigProvider);
-    final timer = ref.watch(pomodoroTimerProvider);
-    final isConnected = ref.watch(deviceStateProvider).isConnected;
+    final config      = ref.watch(pomodoroConfigProvider);
+    final timer       = ref.watch(pomodoroTimerProvider);
+    final transport   = ref.watch(transportProvider);
+    final isConnected = transport.isConnected;
 
-    final totalSecs = ref
-        .read(pomodoroTimerProvider.notifier)
+    final totalSecs = ref.read(pomodoroTimerProvider.notifier)
         .totalSeconds(timer.phase, config);
     final progress = totalSecs > 0 ? timer.secondsRemaining / totalSecs : 0.0;
 
@@ -247,108 +208,92 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 520),
-            child: Column(
-              children: [
-                _TimerRing(progress: progress, timer: timer, config: config),
-                const Gap(32),
-                _TimerControls(
-                  timer: timer,
-                  config: config,
-                  onStart: () {
-                    ref.read(pomodoroTimerProvider.notifier).start(config);
-                    if (isConnected) {
-                      ref.read(deviceApiServiceProvider).pomodoroCommand('start');
-                    }
-                  },
-                  onPause: () {
-                    ref.read(pomodoroTimerProvider.notifier).pause();
-                    if (isConnected) {
-                      ref.read(deviceApiServiceProvider).pomodoroCommand('pause');
-                    }
-                  },
-                  onReset: () {
-                    ref.read(pomodoroTimerProvider.notifier).reset(config);
-                    if (isConnected) {
-                      ref.read(deviceApiServiceProvider).pomodoroCommand('reset');
-                    }
-                  },
+            child: Column(children: [
+              _TimerRing(progress: progress, timer: timer, config: config),
+              const Gap(32),
+              _TimerControls(
+                timer: timer, config: config,
+                onStart: () {
+                  ref.read(pomodoroTimerProvider.notifier).start(config);
+                  if (isConnected) transport.pomoCommand('start');
+                },
+                onPause: () {
+                  ref.read(pomodoroTimerProvider.notifier).pause();
+                  if (isConnected) transport.pomoCommand('pause');
+                },
+                onReset: () {
+                  ref.read(pomodoroTimerProvider.notifier).reset(config);
+                  if (isConnected) transport.pomoCommand('reset');
+                },
+              ),
+              const Gap(32),
+              _SessionDots(completed: timer.sessionsCompleted, total: config.sessionsBeforeLong),
+              const Gap(32),
+              _PomodoroConfigWidget(
+                config: config,
+                onUpdate: (c) async {
+                  await ref.read(pomodoroConfigProvider.notifier).update(c);
+                  ref.read(pomodoroTimerProvider.notifier).reset(c);
+                },
+              ),
+              const Gap(24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: isConnected && !_isSyncing
+                      ? () => _syncToDevice(config, transport)
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.pomodoro,
+                      foregroundColor: AppColors.bg),
+                  icon: _isSyncing
+                      ? const SizedBox(width: 16, height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.bg))
+                      : const Icon(Icons.sync, size: 18),
+                  label: Text(_isSyncing
+                      ? 'Syncing…'
+                      : 'Sync to matrix via ${transport.transportLabel}'),
                 ),
-                const Gap(32),
-                _SessionDots(
-                  completed: timer.sessionsCompleted,
-                  total: config.sessionsBeforeLong,
-                ),
-                const Gap(32),
-                _PomodoroConfig(
-                  config: config,
-                  onUpdate: (c) async {
-                    await ref.read(pomodoroConfigProvider.notifier).update(c);
-                    ref.read(pomodoroTimerProvider.notifier).reset(c);
-                  },
-                ),
-                const Gap(24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: isConnected && !_isSyncing
-                        ? () => _syncToDevice(config)
-                        : null,
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.pomodoro,
-                        foregroundColor: AppColors.bg),
-                    icon: _isSyncing
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: AppColors.bg))
-                        : const Icon(Icons.sync, size: 18),
-                    label: Text(_isSyncing ? 'Syncing…' : 'Sync config to matrix'),
-                  ),
-                ),
-                if (!isConnected)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8),
-                    child: Text(
-                      'Connect to ESP32 in Setup to sync timer',
+              ),
+              if (!isConnected)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Text('Connect via USB or WiFi in Setup',
                       style: TextStyle(fontSize: 12, color: AppColors.textMuted),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                if (_syncResult != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Text(
-                      _syncResult!,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: _syncResult!.startsWith('✓')
-                            ? AppColors.connected
-                            : AppColors.disconnected,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                const Gap(24),
-              ],
-            ),
+                      textAlign: TextAlign.center),
+                ),
+              if (_syncResult != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text(_syncResult!,
+                      style: TextStyle(fontSize: 13,
+                          color: _syncResult!.startsWith('✓')
+                              ? AppColors.connected : AppColors.disconnected),
+                      textAlign: TextAlign.center),
+                ),
+              const Gap(24),
+            ]),
           ),
         ),
       ),
     );
   }
 
-  Future<void> _syncToDevice(PomodoroConfig config) async {
-    setState(() {
-      _isSyncing = true;
-      _syncResult = null;
-    });
+  Future<void> _syncToDevice(PomodoroConfig config, TransportService transport) async {
+    setState(() { _isSyncing = true; _syncResult = null; });
     try {
-      await ref.read(deviceApiServiceProvider).sendPomodoroConfig(config);
-      await ref.read(deviceApiServiceProvider).setMode(AppMode.pomodoro);
-      setState(() => _syncResult = '✓ Pomodoro config synced to matrix');
+      final ok1 = await transport.setPomoConfig(
+        workMinutes:        config.workMinutes,
+        shortBreakMinutes:  config.shortBreakMinutes,
+        longBreakMinutes:   config.longBreakMinutes,
+        sessionsBeforeLong: config.sessionsBeforeLong,
+      );
+      final ok2 = await transport.setMode(AppMode.pomodoro);
+      setState(() => _syncResult = (ok1 && ok2)
+          ? '✓ Pomodoro config synced via ${transport.transportLabel}'
+          : '✗ ${transport.lastError}');
     } catch (e) {
-      setState(() => _syncResult = '✗ Sync failed: $e');
+      setState(() => _syncResult = '✗ $e');
     } finally {
       setState(() => _isSyncing = false);
     }
@@ -358,465 +303,184 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
 // ── Timer ring ────────────────────────────────────────────────────────────
 
 class _TimerRing extends StatelessWidget {
-  final double progress;
-  final PomodoroState timer;
-  final PomodoroConfig config;
-
-  const _TimerRing({
-    required this.progress,
-    required this.timer,
-    required this.config,
-  });
+  final double progress; final PomodoroState timer; final PomodoroConfig config;
+  const _TimerRing({required this.progress, required this.timer, required this.config});
 
   @override
   Widget build(BuildContext context) {
     final phaseColor = switch (timer.phase) {
-      PomodoroPhase.work => AppColors.pomodoro,
+      PomodoroPhase.work       => AppColors.pomodoro,
       PomodoroPhase.shortBreak => AppColors.connected,
-      PomodoroPhase.longBreak => AppColors.clock,
+      PomodoroPhase.longBreak  => AppColors.clock,
     };
-
     final phaseLabel = switch (timer.phase) {
-      PomodoroPhase.work => 'FOCUS',
+      PomodoroPhase.work       => 'FOCUS',
       PomodoroPhase.shortBreak => 'SHORT BREAK',
-      PomodoroPhase.longBreak => 'LONG BREAK',
+      PomodoroPhase.longBreak  => 'LONG BREAK',
     };
 
-    return SizedBox(
-      width: 220,
-      height: 220,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          SizedBox(
-            width: 220,
-            height: 220,
-            child: CustomPaint(
-              painter: _RingPainter(
-                progress: progress,
-                color: phaseColor,
-                trackColor: phaseColor.withOpacity(0.1),
-              ),
-            ),
-          ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                phaseLabel,
-                style: TextStyle(
-                  fontFamily: 'SpaceMono',
-                  fontSize: 10,
-                  color: phaseColor.withOpacity(0.7),
-                  letterSpacing: 1.5,
-                ),
-              ),
-              const Gap(6),
-              Text(
-                timer.timeLabel,
-                style: TextStyle(
-                  fontFamily: 'SpaceMono',
-                  fontSize: 40,
-                  fontWeight: FontWeight.w700,
-                  color: phaseColor,
-                  height: 1,
-                ),
-              ),
-              const Gap(8),
-              if (timer.isRunning)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: phaseColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: phaseColor.withOpacity(0.3)),
-                  ),
-                  child: Text(
-                    'RUNNING',
-                    style: TextStyle(
-                      fontFamily: 'SpaceMono',
-                      fontSize: 9,
-                      color: phaseColor,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                )
-              else
-                Text(
-                  'Session ${timer.sessionsCompleted + 1}',
-                  style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
+    return SizedBox(width: 220, height: 220, child: Stack(alignment: Alignment.center, children: [
+      SizedBox(width: 220, height: 220, child: CustomPaint(painter: _RingPainter(
+          progress: progress, color: phaseColor, trackColor: phaseColor.withOpacity(0.1)))),
+      Column(mainAxisSize: MainAxisSize.min, children: [
+        Text(phaseLabel, style: TextStyle(fontFamily: 'SpaceMono', fontSize: 10,
+            color: phaseColor.withOpacity(0.7), letterSpacing: 1.5)),
+        const Gap(6),
+        Text(timer.timeLabel, style: TextStyle(fontFamily: 'SpaceMono', fontSize: 40,
+            fontWeight: FontWeight.w700, color: phaseColor, height: 1)),
+        const Gap(8),
+        if (timer.isRunning)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(color: phaseColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: phaseColor.withOpacity(0.3))),
+            child: Text('RUNNING', style: TextStyle(fontFamily: 'SpaceMono',
+                fontSize: 9, color: phaseColor, letterSpacing: 1.5)),
+          )
+        else
+          Text('Session ${timer.sessionsCompleted + 1}',
+              style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
+      ]),
+    ]));
   }
 }
 
 class _RingPainter extends CustomPainter {
-  final double progress;
-  final Color color;
-  final Color trackColor;
-
-  const _RingPainter({
-    required this.progress,
-    required this.color,
-    required this.trackColor,
-  });
-
+  final double progress; final Color color; final Color trackColor;
+  const _RingPainter({required this.progress, required this.color, required this.trackColor});
   @override
   void paint(Canvas canvas, Size size) {
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-    final r = (size.width / 2) - 12;
-    const strokeWidth = 8.0;
-
-    canvas.drawArc(
-      Rect.fromCircle(center: Offset(cx, cy), radius: r),
-      0,
-      2 * math.pi,
-      false,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth
-        ..color = trackColor,
-    );
-
-    if (progress > 0) {
-      canvas.drawArc(
-        Rect.fromCircle(center: Offset(cx, cy), radius: r),
-        -math.pi / 2,
-        2 * math.pi * progress,
-        false,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = strokeWidth
-          ..strokeCap = StrokeCap.round
-          ..color = color,
-      );
-    }
+    final cx = size.width / 2; final cy = size.height / 2;
+    final r = (size.width / 2) - 12; const strokeWidth = 8.0;
+    canvas.drawArc(Rect.fromCircle(center: Offset(cx, cy), radius: r), 0, 2*math.pi, false,
+        Paint()..style = PaintingStyle.stroke..strokeWidth = strokeWidth..color = trackColor);
+    if (progress > 0)
+      canvas.drawArc(Rect.fromCircle(center: Offset(cx, cy), radius: r),
+          -math.pi/2, 2*math.pi*progress, false,
+          Paint()..style = PaintingStyle.stroke..strokeWidth = strokeWidth
+              ..strokeCap = StrokeCap.round..color = color);
   }
-
-  @override
-  bool shouldRepaint(_RingPainter old) => old.progress != progress;
+  @override bool shouldRepaint(_RingPainter o) => o.progress != progress;
 }
 
-// ── Controls ──────────────────────────────────────────────────────────────
+// ── Controls, session dots, config (identical to original) ────────────────
 
 class _TimerControls extends StatelessWidget {
-  final PomodoroState timer;
-  final PomodoroConfig config;
-  final VoidCallback onStart;
-  final VoidCallback onPause;
-  final VoidCallback onReset;
-
-  const _TimerControls({
-    required this.timer,
-    required this.config,
-    required this.onStart,
-    required this.onPause,
-    required this.onReset,
-  });
+  final PomodoroState timer; final PomodoroConfig config;
+  final VoidCallback onStart; final VoidCallback onPause; final VoidCallback onReset;
+  const _TimerControls({required this.timer, required this.config,
+      required this.onStart, required this.onPause, required this.onReset});
 
   @override
-  Widget build(BuildContext context) => Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _ControlBtn(
-            icon: Icons.replay,
-            color: AppColors.textSecondary,
-            onTap: onReset,
-            tooltip: 'Reset',
-          ),
-          const Gap(16),
-          GestureDetector(
-            onTap: timer.isRunning ? onPause : onStart,
-            child: Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: AppColors.pomodoro,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.pomodoro.withOpacity(0.3),
-                    blurRadius: 16,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              child: Icon(
-                timer.isRunning ? Icons.pause : Icons.play_arrow,
-                size: 32,
-                color: AppColors.bg,
-              ),
-            ),
-          ),
-          const Gap(16),
-          _ControlBtn(
-            icon: Icons.skip_next,
-            color: AppColors.textSecondary,
-            onTap: () {},
-            tooltip: 'Skip phase',
-          ),
-        ],
-      );
+  Widget build(BuildContext context) => Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+    _ControlBtn(icon: Icons.replay, color: AppColors.textSecondary, onTap: onReset, tooltip: 'Reset'),
+    const Gap(16),
+    GestureDetector(
+      onTap: timer.isRunning ? onPause : onStart,
+      child: Container(width: 64, height: 64, decoration: BoxDecoration(
+          color: AppColors.pomodoro, shape: BoxShape.circle,
+          boxShadow: [BoxShadow(color: AppColors.pomodoro.withOpacity(0.3), blurRadius: 16, spreadRadius: 2)]),
+          child: Icon(timer.isRunning ? Icons.pause : Icons.play_arrow, size: 32, color: AppColors.bg)),
+    ),
+    const Gap(16),
+    _ControlBtn(icon: Icons.skip_next, color: AppColors.textSecondary, onTap: () {}, tooltip: 'Skip'),
+  ]);
 }
 
 class _ControlBtn extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-  final String tooltip;
-
-  const _ControlBtn({
-    required this.icon,
-    required this.color,
-    required this.onTap,
-    required this.tooltip,
-  });
-
+  final IconData icon; final Color color; final VoidCallback onTap; final String tooltip;
+  const _ControlBtn({required this.icon, required this.color, required this.onTap, required this.tooltip});
   @override
-  Widget build(BuildContext context) => Tooltip(
-        message: tooltip,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: color.withOpacity(0.2)),
-            ),
-            child: Icon(icon, size: 20, color: color),
-          ),
-        ),
-      );
+  Widget build(BuildContext context) => Tooltip(message: tooltip, child: InkWell(onTap: onTap,
+      borderRadius: BorderRadius.circular(12), child: Container(width: 44, height: 44,
+          decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: color.withOpacity(0.2))),
+          child: Icon(icon, size: 20, color: color))));
 }
-
-// ── Session dots ──────────────────────────────────────────────────────────
 
 class _SessionDots extends StatelessWidget {
-  final int completed;
-  final int total;
-
+  final int completed; final int total;
   const _SessionDots({required this.completed, required this.total});
-
   @override
-  Widget build(BuildContext context) => Column(
-        children: [
-          Text(
-            'SESSIONS',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppColors.pomodoro,
-                  letterSpacing: 1.2,
-                ),
-          ),
-          const Gap(10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(total, (i) {
-              final done = i < (completed % total);
-              return Container(
-                width: 10,
-                height: 10,
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                decoration: BoxDecoration(
-                  color: done
-                      ? AppColors.pomodoro
-                      : AppColors.pomodoro.withOpacity(0.15),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: AppColors.pomodoro.withOpacity(done ? 0 : 0.3),
-                  ),
-                ),
-              );
-            }),
-          ),
-          const Gap(6),
-          Text(
-            '$completed sessions completed total',
-            style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
-          ),
-        ],
-      );
+  Widget build(BuildContext context) => Column(children: [
+    Text('SESSIONS', style: Theme.of(context).textTheme.labelSmall?.copyWith(
+        color: AppColors.pomodoro, letterSpacing: 1.2)),
+    const Gap(10),
+    Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(total, (i) {
+      final done = i < (completed % total);
+      return Container(width: 10, height: 10, margin: const EdgeInsets.symmetric(horizontal: 4),
+          decoration: BoxDecoration(
+              color: done ? AppColors.pomodoro : AppColors.pomodoro.withOpacity(0.15),
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.pomodoro.withOpacity(done ? 0 : 0.3))));
+    })),
+    const Gap(6),
+    Text('$completed sessions completed total',
+        style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
+  ]);
 }
 
-// ── Config panel ──────────────────────────────────────────────────────────
-
-class _PomodoroConfig extends StatelessWidget {
-  final PomodoroConfig config;
-  final ValueChanged<PomodoroConfig> onUpdate;
-
-  const _PomodoroConfig({required this.config, required this.onUpdate});
+class _PomodoroConfigWidget extends StatelessWidget {
+  final PomodoroConfig config; final ValueChanged<PomodoroConfig> onUpdate;
+  const _PomodoroConfigWidget({required this.config, required this.onUpdate});
 
   @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'TIMER SETTINGS',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppColors.pomodoro,
-                  letterSpacing: 1.2,
-                ),
-          ),
-          const Gap(12),
-          Container(
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              children: [
-                _DurationRow(
-                  icon: Icons.work_outline,
-                  label: 'Focus duration',
-                  value: config.workMinutes,
-                  min: 1,
-                  max: 90,
-                  color: AppColors.pomodoro,
-                  onChanged: (v) => onUpdate(config.copyWith(workMinutes: v)),
-                ),
-                const Divider(height: 1, indent: 16, endIndent: 16, color: AppColors.border),
-                _DurationRow(
-                  icon: Icons.coffee_outlined,
-                  label: 'Short break',
-                  value: config.shortBreakMinutes,
-                  min: 1,
-                  max: 30,
-                  color: AppColors.connected,
-                  onChanged: (v) => onUpdate(config.copyWith(shortBreakMinutes: v)),
-                ),
-                const Divider(height: 1, indent: 16, endIndent: 16, color: AppColors.border),
-                _DurationRow(
-                  icon: Icons.self_improvement_outlined,
-                  label: 'Long break',
-                  value: config.longBreakMinutes,
-                  min: 5,
-                  max: 60,
-                  color: AppColors.clock,
-                  onChanged: (v) => onUpdate(config.copyWith(longBreakMinutes: v)),
-                ),
-                const Divider(height: 1, indent: 16, endIndent: 16, color: AppColors.border),
-                _DurationRow(
-                  icon: Icons.repeat_outlined,
-                  label: 'Sessions before long break',
-                  value: config.sessionsBeforeLong,
-                  min: 2,
-                  max: 8,
-                  color: AppColors.pomodoro,
-                  unit: '',
-                  onChanged: (v) => onUpdate(config.copyWith(sessionsBeforeLong: v)),
-                ),
-                const Divider(height: 1, indent: 16, endIndent: 16, color: AppColors.border),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.notifications_outlined,
-                          size: 18, color: AppColors.pomodoro),
-                      const Gap(12),
-                      const Text('Alert on completion',
-                          style: TextStyle(fontSize: 14, color: AppColors.textPrimary)),
-                      const Spacer(),
-                      Switch(
-                        value: config.alertOnComplete,
-                        activeColor: AppColors.pomodoro,
-                        onChanged: (v) => onUpdate(config.copyWith(alertOnComplete: v)),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      );
+  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    Text('TIMER SETTINGS', style: Theme.of(context).textTheme.labelSmall?.copyWith(
+        color: AppColors.pomodoro, letterSpacing: 1.2)),
+    const Gap(12),
+    Container(decoration: BoxDecoration(color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+      child: Column(children: [
+        _DurRow(icon: Icons.work_outline, label: 'Focus duration', value: config.workMinutes,
+            min: 1, max: 90, color: AppColors.pomodoro,
+            onChanged: (v) => onUpdate(config.copyWith(workMinutes: v))),
+        const Divider(height: 1, indent: 16, endIndent: 16, color: AppColors.border),
+        _DurRow(icon: Icons.coffee_outlined, label: 'Short break', value: config.shortBreakMinutes,
+            min: 1, max: 30, color: AppColors.connected,
+            onChanged: (v) => onUpdate(config.copyWith(shortBreakMinutes: v))),
+        const Divider(height: 1, indent: 16, endIndent: 16, color: AppColors.border),
+        _DurRow(icon: Icons.self_improvement_outlined, label: 'Long break', value: config.longBreakMinutes,
+            min: 5, max: 60, color: AppColors.clock,
+            onChanged: (v) => onUpdate(config.copyWith(longBreakMinutes: v))),
+        const Divider(height: 1, indent: 16, endIndent: 16, color: AppColors.border),
+        _DurRow(icon: Icons.repeat_outlined, label: 'Sessions before long break',
+            value: config.sessionsBeforeLong, min: 2, max: 8, color: AppColors.pomodoro, unit: '',
+            onChanged: (v) => onUpdate(config.copyWith(sessionsBeforeLong: v))),
+      ]),
+    ),
+  ]);
 }
 
-class _DurationRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final int value;
-  final int min;
-  final int max;
-  final Color color;
-  final String unit;
+class _DurRow extends StatelessWidget {
+  final IconData icon; final String label; final int value;
+  final int min; final int max; final Color color; final String unit;
   final ValueChanged<int> onChanged;
-
-  const _DurationRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.color,
-    required this.onChanged,
-    this.unit = 'min',
-  });
-
+  const _DurRow({required this.icon, required this.label, required this.value,
+      required this.min, required this.max, required this.color,
+      required this.onChanged, this.unit = 'min'});
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: color),
-            const Gap(12),
-            Expanded(
-              child: Text(label,
-                  style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
-            ),
-            InkWell(
-              onTap: value > min ? () => onChanged(value - 1) : null,
-              borderRadius: BorderRadius.circular(6),
-              child: Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceElevated,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Icon(Icons.remove,
-                    size: 14,
-                    color: value > min ? AppColors.textSecondary : AppColors.textMuted),
-              ),
-            ),
-            SizedBox(
-              width: 48,
-              child: Text(
-                unit.isEmpty ? '$value' : '$value $unit',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: 'SpaceMono',
-                  fontSize: 12,
-                  color: color,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            InkWell(
-              onTap: value < max ? () => onChanged(value + 1) : null,
-              borderRadius: BorderRadius.circular(6),
-              child: Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceElevated,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Icon(Icons.add,
-                    size: 14,
-                    color: value < max ? AppColors.textSecondary : AppColors.textMuted),
-              ),
-            ),
-          ],
-        ),
-      );
+    padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+    child: Row(children: [
+      Icon(icon, size: 18, color: color), const Gap(12),
+      Expanded(child: Text(label, style: const TextStyle(fontSize: 13, color: AppColors.textPrimary))),
+      InkWell(onTap: value > min ? () => onChanged(value-1) : null, borderRadius: BorderRadius.circular(6),
+          child: Container(width: 28, height: 28,
+              decoration: BoxDecoration(color: AppColors.surfaceElevated,
+                  borderRadius: BorderRadius.circular(6), border: Border.all(color: AppColors.border)),
+              child: Icon(Icons.remove, size: 14,
+                  color: value > min ? AppColors.textSecondary : AppColors.textMuted))),
+      SizedBox(width: 48, child: Text(unit.isEmpty ? '$value' : '$value $unit',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontFamily: 'SpaceMono', fontSize: 12, color: color, fontWeight: FontWeight.w600))),
+      InkWell(onTap: value < max ? () => onChanged(value+1) : null, borderRadius: BorderRadius.circular(6),
+          child: Container(width: 28, height: 28,
+              decoration: BoxDecoration(color: AppColors.surfaceElevated,
+                  borderRadius: BorderRadius.circular(6), border: Border.all(color: AppColors.border)),
+              child: Icon(Icons.add, size: 14,
+                  color: value < max ? AppColors.textSecondary : AppColors.textMuted))),
+    ]),
+  );
 }

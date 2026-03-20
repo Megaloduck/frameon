@@ -194,23 +194,23 @@ class DeviceApiService extends ChangeNotifier {
     }
     return null;
   }
-
-  Future<bool> postJson(String path, Map<String, dynamic> body) async {
-    if (_baseUrl == null) return false;
-    try {
-      final res = await http
-          .post(
-            Uri.parse('$_baseUrl$path'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(body),
-          )
-          .timeout(const Duration(seconds: 5));
-      return res.statusCode == 200;
-    } catch (e) {
-      debugPrint('POST $path error: $e');
-      return false;
-    }
-  }
+  
+   Future<bool> postJson(String path, Map<String, dynamic> body,
+       {Duration timeout = const Duration(seconds: 10)}) async {
+          if (_baseUrl == null) return false;
+            try {
+              final res = await http
+              .post(
+                Uri.parse('$_baseUrl$path'),
+                headers: {'Content-Type': 'application/json'},
+                body: jsonEncode(body),
+                )
+                .timeout(timeout);
+                return res.statusCode == 200;
+                } catch (e) {debugPrint('POST $path error: $e');
+                rethrow;
+           }
+        }
 
   AppMode _parseModeFromString(String s) => AppMode.values.firstWhere(
         (m) => m.name == s,
